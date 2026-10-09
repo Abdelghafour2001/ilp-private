@@ -376,6 +376,7 @@ export const en: Record<string, string> = {
   "nav.admin.desc": "Manage the platform",
   "shell.collapse": "Collapse",
   "shell.expand": "Expand",
+  "shell.skip": "Skip to content",
   "shell.search": "Search or jump to…",
   "shell.language": "Language",
   "shell.signOut": "Sign out",

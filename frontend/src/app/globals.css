@@ -133,6 +133,42 @@
     outline-offset: 2px;
     border-radius: 4px;
   }
+  /* No 300ms double-tap-zoom wait on touch, and no grey flash on tap. */
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  label {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Headings break evenly instead of leaving one word on the last line. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  /* A sticky 4rem topbar must not cover an anchor target or a focused field. */
+  html {
+    scroll-padding-top: 5rem;
+  }
+}
+
+/* People who asked their OS for less motion get none: no slide-ins, no
+   shimmer, no lift on hover. State still changes, it just doesn't travel. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @layer components {
@@ -141,7 +177,7 @@
     @apply rounded-xl border border-border bg-surface p-5 shadow-sm;
   }
   .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md;
+    @apply transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md;
   }
   .surface-2 {
     @apply bg-surface-2;
@@ -152,13 +188,13 @@
 
   /* ---- Buttons ----------------------------------------------------------- */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg shadow-xs transition-all duration-150 hover:bg-accent-hover hover:shadow-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg shadow-xs transition-[background-color,box-shadow,transform] duration-150 hover:bg-accent-hover hover:shadow-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text-muted transition-all duration-150 hover:border-border-strong hover:bg-surface-2 hover:text-text active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text-muted transition-[background-color,border-color,color,transform] duration-150 hover:border-border-strong hover:bg-surface-2 hover:text-text active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-soft {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent/10 px-3.5 py-2 text-sm font-medium text-accent-text transition-all duration-150 hover:bg-accent/15 active:scale-[0.98];
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent/10 px-3.5 py-2 text-sm font-medium text-accent-text transition-[background-color,transform] duration-150 hover:bg-accent/15 active:scale-[0.98];
   }
   .btn-sm {
     @apply px-2.5 py-1.5 text-xs;
@@ -172,6 +208,10 @@
   .select,
   .textarea {
     @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text shadow-xs outline-none transition placeholder:text-text-subtle focus:border-accent focus:ring-2 focus:ring-accent/25;
+  }
+  /* Skip link: invisible until a keyboard user tabs onto it. */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-accent-fg focus:shadow-lg;
   }
   .label {
     @apply mb-1.5 block text-xs font-medium text-text-muted;

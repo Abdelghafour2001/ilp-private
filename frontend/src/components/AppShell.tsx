@@ -9,8 +9,10 @@ import { getStoredLearner } from "@/lib/learner";
 import FeatureGate from "@/components/FeatureGate";
 import ChoosePassword from "@/components/ChoosePassword";
 import { api } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  const t = useT();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [ready, setReady] = useState(false);
   // A password somebody else chose. Read from storage first so there is no
@@ -68,10 +70,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      <a href="#main" className="skip-link">
+        {t("shell.skip")}
+      </a>
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onMenu={() => setMobileOpen(true)} />
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
+        <main id="main" tabIndex={-1} className="flex-1 px-4 py-6 outline-none md:px-8 md:py-8">
           <div className="mx-auto w-full max-w-6xl">
             <FeatureGate>{children}</FeatureGate>
           </div>

@@ -373,6 +373,7 @@ export const fr: Record<string, string> = {
   "nav.admin.desc": "Gérer la plateforme",
   "shell.collapse": "Réduire",
   "shell.expand": "Déployer",
+  "shell.skip": "Aller au contenu",
   "shell.search": "Rechercher ou accéder à…",
   "shell.language": "Langue",
   "shell.signOut": "Se déconnecter",
