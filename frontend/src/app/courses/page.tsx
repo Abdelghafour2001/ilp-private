@@ -9,13 +9,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, type CourseSummary } from "@/lib/api";
 import CourseCover from "@/components/CourseCover";
+import Icon from "@/components/Icon";
+import Modal from "@/components/Modal";
 import { getStoredLearner } from "@/lib/learner";
 import { useFormat, useT } from "@/lib/i18n";
 
-const LEVEL: Record<string, string> = {
-  beginner: "bg-good/15 text-good",
-  intermediate: "bg-warn/15 text-warn",
-  advanced: "bg-bad/15 text-bad",
+const LEVEL_DOT: Record<string, string> = {
+  beginner: "bg-good",
+  intermediate: "bg-warn",
+  advanced: "bg-bad",
 };
 
 /** "data-science" reads as a slug; "Data science" reads as a subject. */
@@ -82,42 +84,48 @@ export default function CoursesCatalog() {
     api.listPathways().then(setPathways).catch(() => {});
   }, []);
 
-  // Esc closes the detail card
-  useEffect(() => {
-    if (!selected) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSelected(null);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selected]);
-
   // What this person owes, lifted to the top of whatever the filters left.
   const shown = mandatoryFirst(courses, owed, onlyOwed);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t("courses.title")}</h1>
-          <p className="mt-1 text-sm text-text-subtle">{t("courses.subtitle")}</p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">{t("courses.title")}</h1>
+          <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-text-muted">{t("courses.subtitle")}</p>
         </div>
         <Link href="/courses/new" className="btn shrink-0">
-          + {t("courses.new")}
+          <Icon name="plus" size={16} aria-hidden="true" /> {t("courses.new")}
         </Link>
-      </div>
+      </header>
 
       {error && <div className="card border-bad/40 text-sm text-bad">{error}</div>}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          className="input max-w-sm"
-          placeholder={t("courses.searchPlaceholder")}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+      <div className="sticky top-16 z-10 -mx-4 flex flex-wrap items-center gap-2 border-b border-border bg-bg/85 px-4 py-3 backdrop-blur-md md:-mx-8 md:px-8">
+        <label className="relative min-w-[14rem] flex-1">
+          <span className="sr-only">{t("courses.searchPlaceholder")}</span>
+          <Icon
+            name="search"
+            size={16}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
+          />
+          <input
+            className="input pl-9"
+            type="search"
+            name="q"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={t("courses.searchPlaceholder")}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
         {/* Subject first: it is what people actually browse by. Then where it
             came from, how hard it is, and which journey it belongs to. */}
         <select
-          className="input max-w-[13rem]"
+          className="input w-auto max-w-[13rem]"
+          aria-label={t("courses.allDomains")}
           value={filters.domain}
           onChange={(e) => setFilters((f) => ({ ...f, domain: e.target.value }))}
         >
@@ -129,7 +137,8 @@ export default function CoursesCatalog() {
           ))}
         </select>
         <select
-          className="input max-w-[11rem]"
+          className="input w-auto max-w-[13rem]"
+          aria-label={t("courses.allProviders")}
           value={filters.provider}
           onChange={(e) => setFilters((f) => ({ ...f, provider: e.target.value }))}
         >
@@ -141,7 +150,8 @@ export default function CoursesCatalog() {
           ))}
         </select>
         <select
-          className="input max-w-[10rem]"
+          className="input w-auto max-w-[13rem]"
+          aria-label={t("courses.allLevels")}
           value={filters.level}
           onChange={(e) => setFilters((f) => ({ ...f, level: e.target.value }))}
         >
@@ -153,7 +163,8 @@ export default function CoursesCatalog() {
           ))}
         </select>
         <select
-          className="input max-w-[13rem]"
+          className="input w-auto max-w-[13rem]"
+          aria-label={t("courses.allPathways")}
           value={filters.pathway}
           onChange={(e) => setFilters((f) => ({ ...f, pathway: e.target.value }))}
         >
@@ -166,10 +177,10 @@ export default function CoursesCatalog() {
         </select>
         {Object.values(filters).some(Boolean) && (
           <button
-            className="text-xs text-text-subtle hover:text-text"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-text-subtle hover:bg-surface-2 hover:text-text"
             onClick={() => setFilters({ domain: "", provider: "", level: "", pathway: "" })}
           >
-            ✕ {t("common.reset")}
+            <Icon name="x" size={13} aria-hidden="true" /> {t("common.reset")}
           </button>
         )}
         {owed.size > 0 && (
@@ -182,145 +193,154 @@ export default function CoursesCatalog() {
             ! {t("catalog.onlyMandatory", { n: owed.size })}
           </button>
         )}
-        <span className="ml-auto text-xs text-text-subtle">
+        <span className="ml-auto text-xs text-text-subtle tnum" aria-live="polite">
           {t("courses.count", { n: shown.length })}
         </span>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
         {pageOf(shown, page).map((c) => (
           <button
             key={c.id}
             onClick={() => setSelected(c)}
-            className={`card group flex flex-col gap-2 text-left transition ${
-              owed.has(c.id)
-                ? "border-bad/60 ring-1 ring-bad/30 hover:border-bad"
-                : "hover:border-accent"
-            }`}
+            className="group flex flex-col rounded-xl text-left"
           >
-            <CourseCover
-              coverUrl={c.cover_url}
-              provider={c.provider}
-              emoji={c.emoji}
-              title={c.title}
-            />
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {owed.get(c.id) && <OwedMarker owed={owed.get(c.id)!} />}
-                {c.external_url && (
-                  <span
-                    className="badge bg-iris/15 text-iris"
-                    title={t("courses.externalOn", { provider: c.provider || t("courses.external") })}
-                  >
-                    ↗ {c.provider || t("courses.external")}
-                  </span>
-                )}
-              </div>
-              <span className={`badge ${LEVEL[c.level] ?? "bg-edge text-text-subtle"}`}>
-                {t(`common.${c.level}`, c.level)}
-              </span>
+            <div
+              className={`relative w-full overflow-hidden rounded-xl border transition-[border-color,box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md ${
+                owed.has(c.id)
+                  ? "border-bad/60 ring-1 ring-bad/30"
+                  : "border-border group-hover:border-border-strong"
+              }`}
+            >
+              <CourseCover
+                coverUrl={c.cover_url}
+                provider={c.provider}
+                emoji={c.emoji}
+                className="aspect-[16/9] rounded-none"
+              />
+              {owed.get(c.id) && (
+                <span className="absolute left-3 top-3">
+                  <OwedMarker owed={owed.get(c.id)!} />
+                </span>
+              )}
             </div>
-            <h3 className="font-medium group-hover:text-accent">{c.title}</h3>
-            <p className="line-clamp-2 text-sm text-text-subtle">{c.summary}</p>
-            <div className="mt-auto flex flex-wrap items-center justify-between gap-1 pt-2 text-xs text-text-subtle">
+            <div className="mt-3.5 flex items-center gap-1.5 text-xs text-text-subtle">
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${LEVEL_DOT[c.level] ?? "bg-text-subtle"}`} aria-hidden="true" />
+              <span className="capitalize">{t(`common.${c.level}`, c.level)}</span>
+              {c.external_url && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span title={t("courses.externalOn", { provider: c.provider || t("courses.external") })}>
+                    {c.provider || t("courses.external")} ↗
+                  </span>
+                </>
+              )}
+              {c.external_hours > 0 && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="tnum">{c.external_hours}&nbsp;h</span>
+                </>
+              )}
+            </div>
+            <h3 className="mt-1.5 text-[15px] font-semibold leading-snug text-text group-hover:text-accent-text">
+              {c.title}
+            </h3>
+            <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-text-muted">{c.summary}</p>
+            <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3 text-xs text-text-subtle">
               <span>{t("common.by")} {c.author}</span>
-              <div className="flex gap-1">
-                {c.tags.slice(0, 2).map((t) => (
-                  <span key={t} className="badge bg-edge text-text-subtle">{t}</span>
-                ))}
-              </div>
+              {c.tags.slice(0, 2).map((tag) => (
+                <span key={tag} className="rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
+                  {tag}
+                </span>
+              ))}
             </div>
           </button>
         ))}
       </div>
       <Pager page={page} total={shown.length} onPage={setPage} size={PAGE_SIZE} />
       {shown.length === 0 && !error && (
-        <p className="text-sm text-text-subtle">{t("courses.empty")}</p>
+        <div className="rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
+          <Icon name="search" size={22} aria-hidden="true" className="mx-auto text-text-subtle" />
+          <p className="mt-3 text-sm text-text-muted">{t("courses.empty")}</p>
+          {Object.values(filters).some(Boolean) && (
+            <button
+              className="btn-ghost btn-sm mt-4"
+              onClick={() => setFilters({ domain: "", provider: "", level: "", pathway: "" })}
+            >
+              {t("common.reset")}
+            </button>
+          )}
+        </div>
       )}
 
-      {/* detail popup — click outside (or Esc) to dismiss */}
       {selected && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm"
-          onClick={() => setSelected(null)}
-        >
-          <div
-            className="w-full max-w-lg animate-scale-in rounded-2xl border border-border bg-surface p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label={selected.title}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <CourseCover
-                  coverUrl={selected.cover_url}
-                  provider={selected.provider}
-                  emoji={selected.emoji}
-                  title={selected.title}
-                />
-              </div>
-              <button className="btn-icon" aria-label={t("common.close")} onClick={() => setSelected(null)}>
-                ✕
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-semibold">{selected.title}</h2>
-              <span className={`badge ${LEVEL[selected.level] ?? "bg-edge text-text-subtle"}`}>
-                {t(`common.${selected.level}`, selected.level)}
-              </span>
-              {selected.external_url && (
-                <span className="badge bg-iris/15 text-iris">
-                  ↗ {selected.provider || t("courses.external")}
-                </span>
-              )}
-            </div>
-            {selected.summary && (
-              <p className="mt-2 text-sm text-text-muted">{selected.summary}</p>
-            )}
-            <div className="mt-3 flex flex-wrap gap-1">
-              {selected.tags.map((t) => (
-                <span key={t} className="badge bg-edge text-text-subtle">{t}</span>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-text-subtle">
-              {t("common.by")} {selected.author} ·{" "}
-              {fmt.date(selected.created_at, { day: "numeric", month: "short", year: "numeric" })}
-            </p>
-            <div className="mt-5 flex gap-2">
-              {selected.external_url ? (
-                <a
-                  href={selected.external_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn flex-1 text-center"
-                >
-                  {selected.provider
-                    ? t("courses.openOn", { provider: selected.provider })
-                    : t("courses.openOnPlatform")}{" "}↗
-                </a>
-              ) : (
-                <button className="btn flex-1" onClick={() => router.push(`/courses/${selected.id}`)}>
-                  {t("courses.start")} →
-                </button>
-              )}
+        <Modal
+          title={selected.title}
+          lede={selected.summary || undefined}
+          onClose={() => setSelected(null)}
+          size="sm"
+          footer={
+            <>
               {/* A provider course opened straight on Coursera and nothing
                   else, so L&D had no way to hand one out from the catalogue —
                   the assign panel lives on the course's own page. */}
               {canAssign && (
-                <button
-                  className="btn-ghost"
-                  onClick={() => router.push(`/courses/${selected.id}`)}
-                >
-                  📌 {t("assign.short")}
+                <button className="btn-ghost" onClick={() => router.push(`/courses/${selected.id}`)}>
+                  {t("assign.short")}
                 </button>
               )}
-              <button className="btn-ghost" onClick={() => setSelected(null)}>
-                {t("common.close")}
-              </button>
-            </div>
+              {selected.external_url ? (
+                <a href={selected.external_url} target="_blank" rel="noreferrer" className="btn">
+                  {selected.provider
+                    ? t("courses.openOn", { provider: selected.provider })
+                    : t("courses.openOnPlatform")}{" "}
+                  <span aria-hidden="true">↗</span>
+                </a>
+              ) : (
+                <button className="btn" onClick={() => router.push(`/courses/${selected.id}`)}>
+                  {t("courses.start")} <Icon name="arrow-right" size={15} aria-hidden="true" />
+                </button>
+              )}
+            </>
+          }
+        >
+          <div className="overflow-hidden rounded-xl border border-border">
+            <CourseCover
+              coverUrl={selected.cover_url}
+              provider={selected.provider}
+              emoji={selected.emoji}
+              className="aspect-[2/1] rounded-none"
+            />
           </div>
-        </div>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-text-subtle">{t("courses.level", "Level")}</dt>
+              <dd className="mt-0.5 flex items-center gap-1.5 font-medium capitalize">
+                <span className={`h-1.5 w-1.5 rounded-full ${LEVEL_DOT[selected.level] ?? "bg-text-subtle"}`} aria-hidden="true" />
+                {t(`common.${selected.level}`, selected.level)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-text-subtle">{t("courses.author", "Author")}</dt>
+              <dd className="mt-0.5 truncate font-medium">{selected.author}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-text-subtle">{t("courses.added", "Added")}</dt>
+              <dd className="mt-0.5 font-medium tnum">
+                {fmt.date(selected.created_at, { day: "numeric", month: "short", year: "numeric" })}
+              </dd>
+            </div>
+          </dl>
+          {selected.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selected.tags.map((tag) => (
+                <span key={tag} className="rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] text-text-muted">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );

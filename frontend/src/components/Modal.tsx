@@ -15,7 +15,8 @@
  * footer then carries Back/Next instead of Save.
  */
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   title: string;
@@ -44,6 +45,16 @@ export default function Modal({
   step,
   stepLabels,
 }: Props) {
+  const dialog = useRef<HTMLDivElement>(null);
+  // Keyboard and screen-reader users land inside the dialog, and go back to
+  // whatever opened it when it closes, instead of being left on the page
+  // behind the backdrop.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    dialog.current?.focus({ preventScroll: true });
+    return () => opener?.focus?.();
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -59,17 +70,23 @@ export default function Modal({
     };
   }, [onClose]);
 
-  return (
+  // Portalled to <body>: an ancestor with a transform, filter or animation
+  // turns `position: fixed` into "fixed to that ancestor", and the backdrop
+  // then stops short of the viewport.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-4 backdrop-blur-sm sm:items-center"
       onClick={onClose}
       role="presentation"
     >
       <div
+        ref={dialog}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`card my-auto w-full ${WIDTH[size]} space-y-4 p-5 shadow-2xl`}
+        className={`card my-auto w-full ${WIDTH[size]} animate-scale-in space-y-4 p-5 shadow-2xl focus:outline-none`}
         // The backdrop closes; a click inside must not travel up to it.
         onClick={(e) => e.stopPropagation()}
       >
@@ -109,6 +126,7 @@ export default function Modal({
           {footer}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

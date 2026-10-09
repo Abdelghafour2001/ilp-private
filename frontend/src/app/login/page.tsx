@@ -156,130 +156,249 @@ function LoginInner() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-bg p-4">
-      <div className="pointer-events-none absolute -left-24 -top-24 h-96 w-96 rounded-full bg-accent/15 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-iris/10 blur-3xl" />
+    <div className="grid min-h-[100dvh] bg-bg lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+      {/* ---- Left: what this is, shown rather than told ------------------ */}
+      <aside
+        className="relative hidden overflow-hidden border-r border-border bg-surface lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16"
+        aria-hidden="true"
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            backgroundImage: "radial-gradient(rgb(var(--border-strong)) 1px, transparent 1.2px)",
+            backgroundSize: "22px 22px",
+            maskImage: "radial-gradient(ellipse 80% 70% at 70% 60%, black 20%, transparent 75%)",
+            WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 70% 60%, black 20%, transparent 75%)",
+          }}
+        />
+        <Brand />
 
-      <div className="relative w-full max-w-md space-y-6">
-        <div className="text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/teal-logo-green.png" alt="Teal" className="mx-auto mb-2 h-16 w-auto rounded-2xl dark:hidden" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/teal-logo-white.png" alt="Teal" className="mx-auto mb-2 hidden h-16 w-auto dark:block" />
-          <p className="eyebrow mb-2">Learning &amp; development</p>
-          <h1 className="text-4xl font-semibold tracking-tight">
-            <span className="text-gradient">UpSkill</span>
-          </h1>
-          <p className="mt-3 text-sm text-text-muted">
-            Trainings, parcours, compétences et certifications — apprends en faisant,
-            ton manager et les RH suivent la progression en temps réel.
+        <div className="relative">
+          <p className="max-w-[16ch] text-5xl font-semibold leading-[1.02] tracking-[-0.04em] text-text xl:text-6xl">
+            Apprendre en <span className="text-accent-text">faisant</span>.
+          </p>
+          <p className="mt-5 max-w-[46ch] text-[15px] leading-relaxed text-text-muted">
+            Trainings, parcours, compétences et certifications au même endroit. Votre manager et
+            les RH suivent la progression en temps réel.
           </p>
         </div>
 
-        <div className="card space-y-4 p-6 shadow-lg">
-          {ways === null ? (
-            <div className="h-11 skeleton rounded-xl" />
-          ) : (
-            <>
-              {(ways.enabled || ways.sso_redirect) && (
-                <button
-                  className="btn w-full justify-center py-2.5"
-                  disabled={busy}
-                  onClick={microsoft}
-                >
-                  {/* Microsoft logo squares */}
-                  <span className="mr-1 grid grid-cols-2 gap-[2px]" aria-hidden>
-                    <span className="h-2 w-2 bg-[#F25022]" />
-                    <span className="h-2 w-2 bg-[#7FBA00]" />
-                    <span className="h-2 w-2 bg-[#00A4EF]" />
-                    <span className="h-2 w-2 bg-[#FFB900]" />
-                  </span>
-                  {busy ? "Connexion…" : "Se connecter avec Microsoft"}
-                </button>
-              )}
-
-              {/* Email + password. Offered beside SSO rather than instead of it:
-                  externals and anyone without an Entra account need a door. */}
-              {ways.password_login && (
-                <div className="space-y-2">
-                  {ways.enabled && (
-                    <p className="text-center text-xs text-text-subtle">
-                      {t("login.orWithPassword")}
-                    </p>
-                  )}
-                  <input
-                    autoFocus={!ways.enabled}
-                    className="input w-full"
-                    type="email"
-                    autoComplete="username"
-                    placeholder="prenom.nom@teal.ma"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                  <input
-                    className="input w-full"
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder={t("login.password")}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && withPassword()}
-                  />
-                  <button
-                    className="btn w-full justify-center py-2.5"
-                    disabled={busy || !email.trim() || !password}
-                    onClick={withPassword}
-                  >
-                    {busy ? t("login.signingIn") : t("login.signIn")}
-                  </button>
-                  <p className="text-center text-[11px] text-text-subtle">
-                    {t("login.forgot")}
-                  </p>
-                </div>
-              )}
-
-              {ways.enabled && ways.handle_login && !showHandle && (
-                <button
-                  className="w-full text-center text-xs text-text-subtle hover:text-text"
-                  onClick={() => setShowHandle(true)}
-                >
-                  ou continuer avec un pseudo (mode démo) →
-                </button>
-              )}
-
-              {ways.handle_login && (!ways.enabled || showHandle) && (
-                <div className="space-y-2">
-                  {!ways.enabled && (
-                    <p className="text-xs text-text-subtle">
-                      SSO Microsoft non configuré sur cet environnement — connexion par pseudo :
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    <input
-                      autoFocus={!ways.enabled}
-                      className="input flex-1"
-                      placeholder="ton.pseudo"
-                      value={handle}
-                      onChange={(e) => setHandle(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && withHandle()}
-                    />
-                    <button className="btn-soft" disabled={busy || handle.trim().length < 2} onClick={withHandle}>
-                      Entrer
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {error && <p className="text-xs text-bad">{error}</p>}
-            </>
-          )}
+        {/* A still life of the product: three fragments of real screens. */}
+        <div className="relative h-56 select-none">
+          <div className="absolute left-0 top-6 w-72 -rotate-[3deg]">
+            <div className="animate-fade-up rounded-xl border border-border bg-surface p-4 shadow-lg [animation-delay:120ms]">
+            <div className="flex items-center gap-3">
+              <span className="relative grid h-12 w-12 place-items-center">
+                <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90">
+                  <circle cx="24" cy="24" r="20" fill="none" strokeWidth="5" className="stroke-surface-3" />
+                  <circle cx="24" cy="24" r="20" fill="none" strokeWidth="5" strokeLinecap="round" className="stroke-accent" strokeDasharray="94 126" />
+                </svg>
+                <span className="text-xs font-semibold tnum">75%</span>
+              </span>
+              <div>
+                <p className="text-sm font-medium">Objectif de la semaine</p>
+                <p className="text-xs text-text-subtle tnum">45 sur 60 min</p>
+              </div>
+            </div>
+            </div>
+          </div>
+          <div className="absolute left-60 top-0 w-64 rotate-[2deg]">
+            <div className="animate-fade-up rounded-xl border border-border bg-surface p-4 shadow-xl [animation-delay:220ms]">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 flex-col items-center justify-center rounded-lg border border-border leading-none">
+                <span className="text-[9px] font-semibold uppercase text-bad">oct</span>
+                <span className="mt-0.5 text-sm font-semibold tnum">12</span>
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">Kickoff — cohorte 2</p>
+                <p className="text-xs text-text-subtle">lun. · 08:30 · Salle Atlas</p>
+              </div>
+            </div>
+            </div>
+          </div>
+          <div className="absolute left-28 top-32 w-80 -rotate-[1deg]">
+            <div className="animate-fade-up rounded-xl border border-border bg-surface p-4 shadow-lg [animation-delay:320ms]">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-sm font-medium">SQL en 1 heure</p>
+              <span className="text-xs text-text-subtle tnum">4/6</span>
+            </div>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-3">
+              <div className="h-full w-2/3 rounded-full bg-accent" />
+            </div>
+            <p className="mt-2 flex items-center gap-1 text-xs text-good">
+              <Icon name="check" size={12} /> Quête « Query master » terminée
+            </p>
+            </div>
+          </div>
         </div>
+      </aside>
 
-        <p className="text-center text-xs text-text-subtle">
-          <Icon name="admin" size={12} className="mr-1 inline" />
-          Première connexion ? Un rapide questionnaire te proposera le parcours adapté.
-        </p>
-      </div>
+      {/* ---- Right: the door ------------------------------------------- */}
+      <main className="flex items-center justify-center px-4 py-12 sm:px-8">
+        <div className="w-full max-w-sm">
+          <div className="mb-10 lg:hidden">
+            <Brand />
+          </div>
+
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">Connexion</h1>
+          <p className="mt-1.5 text-sm text-text-muted">
+            Accédez à vos formations, parcours et certifications.
+          </p>
+
+          <div className="mt-8 space-y-4">
+            {ways === null ? (
+              <div className="space-y-3" aria-busy="true">
+                <div className="h-11 skeleton rounded-lg" />
+                <div className="h-11 skeleton rounded-lg" />
+              </div>
+            ) : (
+              <>
+                {(ways.enabled || ways.sso_redirect) && (
+                  <button
+                    className="btn-ghost w-full justify-center py-2.5 text-text"
+                    disabled={busy}
+                    onClick={microsoft}
+                  >
+                    {/* Microsoft logo squares */}
+                    <span className="mr-1 grid grid-cols-2 gap-[2px]" aria-hidden>
+                      <span className="h-2 w-2 bg-[#F25022]" />
+                      <span className="h-2 w-2 bg-[#7FBA00]" />
+                      <span className="h-2 w-2 bg-[#00A4EF]" />
+                      <span className="h-2 w-2 bg-[#FFB900]" />
+                    </span>
+                    {busy ? "Connexion…" : "Continuer avec Microsoft"}
+                  </button>
+                )}
+
+                {/* Email + password. Offered beside SSO rather than instead of it:
+                    externals and anyone without an Entra account need a door. */}
+                {ways.password_login && (
+                  <form
+                    className="space-y-3"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      withPassword();
+                    }}
+                  >
+                    {ways.enabled && <Divider>{t("login.orWithPassword")}</Divider>}
+                    <div>
+                      <label htmlFor="login-email" className="label">E-mail</label>
+                      <input
+                        id="login-email"
+                        name="email"
+                        autoFocus={!ways.enabled}
+                        className="input py-2.5"
+                        type="email"
+                        autoComplete="username"
+                        spellCheck={false}
+                        placeholder="prenom.nom@teal.ma"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="login-password" className="label">{t("login.password")}</label>
+                      <input
+                        id="login-password"
+                        name="password"
+                        className="input py-2.5"
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn w-full justify-center py-2.5"
+                      disabled={busy || !email.trim() || !password}
+                    >
+                      {busy ? t("login.signingIn") : t("login.signIn")}
+                    </button>
+                    <p className="text-center text-xs text-text-subtle">{t("login.forgot")}</p>
+                  </form>
+                )}
+
+                {ways.enabled && ways.handle_login && !showHandle && (
+                  <button
+                    className="w-full text-center text-xs text-text-subtle hover:text-text"
+                    onClick={() => setShowHandle(true)}
+                  >
+                    ou continuer avec un pseudo (mode démo) →
+                  </button>
+                )}
+
+                {ways.handle_login && (!ways.enabled || showHandle) && (
+                  <div className="space-y-2">
+                    {ways.enabled ? (
+                      <Divider>mode démo</Divider>
+                    ) : (
+                      <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs leading-relaxed text-text-muted">
+                        SSO Microsoft non configuré sur cet environnement — connexion par pseudo.
+                      </p>
+                    )}
+                    <label htmlFor="login-handle" className="label pt-1">Pseudo</label>
+                    <div className="flex gap-2">
+                      <input
+                        id="login-handle"
+                        name="handle"
+                        autoFocus={!ways.enabled}
+                        className="input flex-1 py-2.5"
+                        autoComplete="username"
+                        spellCheck={false}
+                        placeholder="ton.pseudo"
+                        value={handle}
+                        onChange={(e) => setHandle(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && withHandle()}
+                      />
+                      <button className="btn px-4" disabled={busy || handle.trim().length < 2} onClick={withHandle}>
+                        Entrer
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {error && (
+                  <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-3 py-2 text-xs text-bad">
+                    {error}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
+          <p className="mt-10 flex items-start gap-2 border-t border-border pt-5 text-xs leading-relaxed text-text-subtle">
+            <Icon name="sparkles" size={14} aria-hidden="true" className="mt-px shrink-0 text-accent-text" />
+            Première connexion ? Un rapide questionnaire vous proposera le parcours adapté.
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function Brand() {
+  return (
+    <div className="relative flex items-center gap-3">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/teal-logo-green.png" alt="Teal" width={41} height={40} className="h-10 w-auto rounded-lg dark:hidden" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/teal-logo-white.png" alt="Teal" width={41} height={40} className="hidden h-10 w-auto dark:block" />
+      <span className="h-6 w-px bg-border" aria-hidden="true" />
+      <span className="leading-tight">
+        <span className="block text-sm font-semibold text-text">UpSkill</span>
+        <span className="block text-[11px] uppercase tracking-[0.14em] text-text-subtle">Learning</span>
+      </span>
+    </div>
+  );
+}
+
+function Divider({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 py-1 text-xs text-text-subtle">
+      <span className="h-px flex-1 bg-border" />
+      {children}
+      <span className="h-px flex-1 bg-border" />
     </div>
   );
 }

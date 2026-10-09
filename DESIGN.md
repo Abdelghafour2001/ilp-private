@@ -193,9 +193,29 @@ elements use a smaller radius than their container.
 - While a request runs, keep the button and show a spinner + "Saving…"; don't
   disable it before the click.
 
+### Sections and panels
+- Section title (`h2`, `text-base font-semibold`) sits **above** its panel, not
+  inside a header bar. Meta (counts, "View all") aligns right on the same line.
+- Inside a panel, split content with `divide-y` / `divide-x` and borders —
+  never cards nested in cards.
+- Lists of destinations are rows (`icon · label · one-line desc`), not grids of
+  big cards. A row's hover is a `bg-surface-2` wash.
+- Several numbers about one thing (level, XP, streak, rank) go in **one**
+  composed panel with a headline and a `<dl>` strip, not N identical stat boxes.
+- Empty and "ask AI" states: a dashed `border-border-strong` box with one
+  sentence and the action.
+
 ### Cards
 `.card` for content blocks, `.card-hover` only when the whole card is a link.
-A clickable card is an `<a>`/`<Link>`, not a `div` with `onClick`.
+A clickable card is an `<a>`/`<Link>`, or a `<button>` when it opens a Modal;
+never a `div` with `onClick`.
+
+### Course covers
+`components/CourseCover.tsx`: real image when there is one; otherwise a
+chart-hue wash + fading dot grid (hue picked from the title hash) with the
+course emoji on a raised tile. Provider courses show the platform colour as a
+top strip and a small mark, never as a full-bleed brand block. Card meta reads
+`● Level · Provider ↗ · 12 h` as a quiet line above the title, not badges.
 
 ### Forms
 - `.label` + control, linked with `htmlFor`/`id`. Placeholders show an example
@@ -206,7 +226,9 @@ A clickable card is an `<a>`/`<Link>`, not a `div` with `onClick`.
   the first invalid field on submit.
 
 ### Modal
-Use `components/Modal.tsx`, never a hand-rolled overlay. Long forms become a
+Use `components/Modal.tsx`, never a hand-rolled overlay. It portals to `<body>`,
+moves focus into the dialog and back to the opener on close, and closes on Esc
+and backdrop click. Long forms become a
 wizard via `steps`, not a taller popup.
 
 ### Navigation
