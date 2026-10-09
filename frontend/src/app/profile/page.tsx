@@ -11,28 +11,27 @@ import { api, type Badge, type EarnedCertificate, type LearnerProfile } from "@/
 import { getStoredLearner } from "@/lib/learner";
 import AchievementBadge, { tierFor } from "@/components/AchievementBadge";
 import ExpiryBadge from "@/components/ExpiryBadge";
-import { useT } from "@/lib/i18n";
+import { useFormat, useI18n } from "@/lib/i18n";
 
 function initials(handle: string) {
   const p = handle.replace(/[._-]+/g, " ").trim().split(/\s+/);
   return ((p[0]?.[0] ?? "") + (p[1]?.[0] ?? "")).toUpperCase() || handle.slice(0, 2).toUpperCase();
 }
 
-function timeAgo(iso: string) {
+function timeAgo(iso: string, locale: string) {
   if (!iso) return "";
-  const d = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (d < 3600) return `${Math.max(1, Math.floor(d / 60))}m ago`;
-  if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
-  return `${Math.floor(d / 86400)}d ago`;
-}
-
-function fmtDate(d: string | null) {
-  if (!d) return "";
-  return new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" });
+  if (s < 3600) return rtf.format(-Math.max(1, Math.floor(s / 60)), "minute");
+  if (s < 86400) return rtf.format(-Math.floor(s / 3600), "hour");
+  return rtf.format(-Math.floor(s / 86400), "day");
 }
 
 export default function ProfilePage() {
-  const t = useT();
+  const { t, locale } = useI18n();
+  const format = useFormat();
+  const fmtDate = (d: string | null) => (d ? format.date(d, { day: "numeric", month: "short", year: "numeric" }) : "");
+  const [allActivity, setAllActivity] = useState(false);
   const [learnerId, setLearnerId] = useState<number | null>(null);
   const [profile, setProfile] = useState<LearnerProfile | null>(null);
   const [catalog, setCatalog] = useState<Badge[]>([]);
@@ -81,79 +80,69 @@ export default function ProfilePage() {
   }
 
   const earned = new Set(profile?.badges ?? []);
+  // Earned first, then the rest: the shelf should open on what you have.
+  const shelf = [...catalog].sort((x, y) => Number(earned.has(y.id)) - Number(earned.has(x.id)));
+  const org = [profile?.bu, profile?.practice, profile?.location].filter(Boolean).join(" · ");
+  const recent = profile?.recent ?? [];
+  const shownActivity = allActivity ? recent : recent.slice(0, 6);
 
   return (
-    <div className="space-y-8">
-      {/* ---- Hero ------------------------------------------------------- */}
-      <section className="relative overflow-hidden rounded-3xl border border-border bg-surface p-6 shadow-sm md:p-8">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-accent/15 blur-3xl" />
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
-          <span className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-accent-sheen text-2xl font-bold text-white shadow-glow">
+    <div className="space-y-10">
+      {/* ---- Who, and how far ---------------------------------------------- */}
+      <section className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="flex min-w-0 items-center gap-5">
+          <span className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-accent text-2xl font-semibold text-accent-fg shadow-sm" aria-hidden="true">
             {profile ? initials(profile.name || profile.handle) : "··"}
           </span>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {profile?.name || profile?.handle || "…"}
-            </h1>
-            <p className="mt-0.5 text-sm font-medium text-accent-text">
-              {profile?.level_title ?? "Novice"} · Level {profile?.level ?? 1}
+          <div className="min-w-0">
+            <h1 className="truncate text-3xl font-semibold tracking-[-0.03em]">{profile?.name || profile?.handle || "…"}</h1>
+            <p className="mt-1 text-sm font-medium text-accent-text">
+              {t("profile.levelLine", { title: profile?.level_title ?? "Novice", level: profile?.level ?? 1 })}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="chip">
-                <Icon name="bolt" size={13} className="text-accent-text" />
-                <span className="font-mono tnum">{profile?.xp ?? 0}</span> XP
-              </span>
-              <span className="chip">
-                <Icon name="flame" size={13} className="text-warn" />
-                <span className="font-mono tnum">{profile?.current_streak ?? 0}</span> {t("profile.dayStreak")}
-              </span>
-              <span className="chip">
-                <Icon name="trophy" size={13} className="text-iris" />
-                <span className="font-mono tnum">{earned.size}</span> badges
-              </span>
-              {(profile?.longest_streak ?? 0) > 0 && (
-                <span className="chip">
-                  {t("profile.bestStreak")} <span className="font-mono tnum">{profile?.longest_streak}</span>
-                </span>
-              )}
+            {(org || profile?.matricule) && (
+              <p className="mt-1.5 text-sm text-text-muted">
+                {org}
+                {profile?.matricule && (
+                  <span className="text-text-subtle">
+                    {org ? " · " : ""}
+                    {t("common.matricule")} {profile.matricule}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="panel overflow-hidden">
+          <div className="flex items-center gap-4 p-5">
+            <LevelRing level={profile?.level ?? 1} pct={profile?.level_pct ?? 0} label={t("home.lvl")} />
+            <div className="min-w-0">
+              <p className="font-semibold">{profile?.level_title ?? "Novice"}</p>
+              <p className="mt-0.5 text-sm text-text-muted tnum">
+                {t("home.progress.toNext", { xp: profile?.xp_to_next ?? 0, level: (profile?.level ?? 1) + 1 })}
+              </p>
             </div>
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <LevelRing level={profile?.level ?? 1} pct={profile?.level_pct ?? 0} size={84} />
-            <p className="text-[11px] text-text-subtle">
-              {profile?.xp_to_next ?? 0} XP to level {(profile?.level ?? 1) + 1}
-            </p>
-          </div>
+          <dl className="grid grid-cols-4 divide-x divide-border border-t border-border bg-surface-2/60 text-center">
+            {[
+              { k: "XP", v: format.number(profile?.xp ?? 0), icon: "bolt" as const, tone: "text-iris" },
+              { k: t("profile.streakShort"), v: profile?.current_streak ?? 0, icon: "flame" as const, tone: "text-warn" },
+              { k: t("profile.bestShort"), v: profile?.longest_streak ?? 0, icon: "trophy" as const, tone: "text-text-subtle" },
+              { k: t("profile.badges"), v: earned.size, icon: "award" as const, tone: "text-good" },
+            ].map((x) => (
+              <div key={x.k} className="px-2 py-3">
+                <dt className="flex items-center justify-center gap-1 text-[11px] text-text-subtle">
+                  <Icon name={x.icon} size={11} className={x.tone} /> {x.k}
+                </dt>
+                <dd className="mt-0.5 font-semibold tnum">{x.v}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
-      {(profile?.bu || profile?.practice || profile?.location || profile?.matricule) && (
-        <section className="panel p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-subtle">
-            {t("profile.org")}
-          </h2>
-          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "BU", value: profile?.bu },
-              { label: "Practice", value: profile?.practice },
-              { label: "Location", value: profile?.location },
-              ...(profile?.matricule != null
-                ? [{ label: t("common.matricule"), value: profile.matricule }]
-                : []),
-            ]
-              .filter((f) => f.value)
-              .map((f) => (
-                <div key={f.label}>
-                  <dt className="text-xs text-text-subtle">{f.label}</dt>
-                  <dd className="mt-0.5 text-sm font-medium">{f.value}</dd>
-                </div>
-              ))}
-          </dl>
-        </section>
-      )}
-
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="space-y-8 lg:col-span-2">
+      <div className="grid gap-x-8 gap-y-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-10">
           {/* Goals first: the skill tree says where you are, this says where
               you are going, and the second is what people come here for. */}
           <GoalsPanel learnerId={learnerId} />
@@ -161,130 +150,132 @@ export default function ProfilePage() {
           {/* Skill tree. Skills left the main menu and live here now, so the
               way through to rating them has to be on this page. */}
           <section>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">{t("profile.skillTree")}</h2>
-              <Link href="/skills" className="text-sm text-accent hover:underline">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-base font-semibold">{t("profile.skillTree")}</h2>
+              <Link href="/skills" className="link text-sm">
                 {t("profile.skillsLink")}
               </Link>
             </div>
             <SkillTree learnerId={learnerId} />
           </section>
-        </div>
 
-        <div className="space-y-8">
-          {/* Badges */}
           <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{t("profile.badges")}</h2>
-              <span className="text-sm text-text-subtle">
-                {earned.size}/{catalog.length}
-              </span>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-base font-semibold">{t("profile.recent")}</h2>
+              {recent.length > 0 && <span className="text-xs text-text-subtle tnum">{recent.length}</span>}
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              {catalog.map((b) => {
-                const has = earned.has(b.id);
-                return (
-                  <div
-                    key={b.id}
-                    className={[
-                      "flex items-center justify-center rounded-xl border p-2.5 transition",
-                      has ? "border-border bg-surface-2" : "border-dashed border-border bg-transparent",
-                    ].join(" ")}
-                  >
-                    <AchievementBadge
-                      emoji={b.emoji}
-                      label={b.name}
-                      tier={tierFor(b.id)}
-                      locked={!has}
-                      size={64}
-                      title={`${b.name} — ${b.description}`}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Certifications */}
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{t("certs.title")}</h2>
-              <Link href="/certifications" className="text-xs text-accent hover:underline">
-                {t("profile.shareOne")}
-              </Link>
-            </div>
-            <div className="panel divide-y divide-border overflow-hidden">
-              {certificates.length === 0 ? (
-                <p className="p-5 text-center text-sm text-text-subtle">
-                  No certificates shared yet —{" "}
-                  <Link href="/certifications" className="text-accent hover:underline">
-                    {t("profile.shareFirst")}
-                  </Link>
-                  .
-                </p>
-              ) : (
-                certificates.map((c) => (
-                  <div key={c.id} className="flex items-start gap-3 p-3.5">
-                    <span className="text-xl leading-none">🏅</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text">
-                        {c.title}
-                        <span className="ml-2 inline-flex align-middle">
-                          <ExpiryBadge expiresOn={c.expires_on} />
-                        </span>
-                      </p>
-                      {c.issuer && <p className="text-xs text-text-subtle">{c.issuer}</p>}
-                      <p className="mt-0.5 text-xs text-text-subtle">
-                        {c.obtained_on ? fmtDate(c.obtained_on) : fmtDate(c.created_at)}
-                        {c.expires_on && (
-                          <span> · valide jusqu&apos;au {fmtDate(c.expires_on)}</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
-          {/* Weekly quests */}
-          <QuestList compact />
-
-          {/* Recent activity */}
-          <section>
-            <h2 className="mb-4 text-lg font-semibold">{t("profile.recent")}</h2>
             <div className="panel divide-y divide-border overflow-hidden">
               {!profile ? (
-                [...Array(4)].map((_, i) => <div key={i} className="h-12 skeleton" />)
-              ) : profile.recent.length === 0 ? (
-                <p className="p-5 text-center text-sm text-text-subtle">
-                  {t("profile.noActivity")}
-                </p>
+                [...Array(4)].map((_, i) => <div key={i} className="m-3 h-10 skeleton" />)
+              ) : recent.length === 0 ? (
+                <p className="p-6 text-center text-sm text-text-subtle">{t("profile.noActivity")}</p>
               ) : (
-                profile.recent.map((r, i) => (
+                shownActivity.map((r, i) => (
                   <Link
                     key={i}
                     href={`/labs/${r.lab_id}`}
-                    className="flex items-center gap-3 p-3.5 transition-colors hover:bg-surface-2"
+                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2"
                   >
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-good/10 text-good">
                       <Icon name="check" size={15} />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-text">{r.step_title}</span>
-                      <span className="truncate text-xs text-text-subtle">{r.lab_title}</span>
+                      <span className="block truncate text-xs text-text-subtle">{r.lab_title}</span>
                     </span>
-                    <span className="shrink-0 text-right">
-                      {r.xp > 0 && <span className="block font-mono text-xs text-accent-text">+{r.xp}</span>}
-                      <span className="text-[11px] text-text-subtle">{timeAgo(r.at)}</span>
-                    </span>
+                    {r.xp > 0 && <span className="text-xs font-medium text-iris tnum">+{r.xp}&nbsp;XP</span>}
+                    <span className="w-20 shrink-0 text-right text-[11px] text-text-subtle tnum">{timeAgo(r.at, locale)}</span>
                   </Link>
                 ))
+              )}
+              {recent.length > 6 && (
+                <button
+                  type="button"
+                  onClick={() => setAllActivity((v) => !v)}
+                  aria-expanded={allActivity}
+                  className="flex w-full items-center justify-center gap-1 py-2.5 text-xs font-medium text-text-muted hover:bg-surface-2 hover:text-text"
+                >
+                  {allActivity ? t("profile.showLess") : t("profile.showAll", { n: recent.length })}
+                  <Icon name="chevron-down" size={13} className={allActivity ? "rotate-180" : ""} />
+                </button>
               )}
             </div>
           </section>
         </div>
+
+        <aside className="min-w-0 space-y-10">
+          <QuestList compact />
+
+          <section>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-base font-semibold">{t("certs.title")}</h2>
+              <Link href="/certifications" className="link text-xs">
+                {t("profile.shareCert")}
+              </Link>
+            </div>
+            {certificates.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border-strong px-5 py-6 text-center text-sm text-text-muted">
+                {t("profile.noCerts")}{" "}
+                <Link href="/certifications" className="link">
+                  {t("profile.shareFirst")}
+                </Link>
+              </div>
+            ) : (
+              <ul className="panel divide-y divide-border overflow-hidden">
+                {certificates.map((c) => (
+                  <li key={c.id} className="flex items-start gap-3 px-4 py-3">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-text-muted">
+                      <Icon name="award" size={15} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-text">{c.title}</p>
+                      <p className="mt-0.5 text-xs text-text-subtle tnum">
+                        {[c.issuer, c.obtained_on ? fmtDate(c.obtained_on) : fmtDate(c.created_at)].filter(Boolean).join(" · ")}
+                      </p>
+                      {c.expires_on && (
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-text-subtle">
+                          {t("certs.validUntil", { date: fmtDate(c.expires_on) })}
+                          <ExpiryBadge expiresOn={c.expires_on} />
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
       </div>
+
+      {/* ---- Badge shelf --------------------------------------------------- */}
+      <section className="border-t border-border pt-8">
+        <div className="mb-4 flex items-baseline justify-between gap-3">
+          <h2 className="text-base font-semibold">{t("profile.badges")}</h2>
+          <span className="text-xs text-text-subtle tnum">{t("profile.badgesOf", { n: earned.size, total: catalog.length })}</span>
+        </div>
+        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
+          {shelf.map((b) => {
+            const has = earned.has(b.id);
+            return (
+              <li
+                key={b.id}
+                className={`flex items-center justify-center rounded-xl border p-2.5 transition-colors ${
+                  has ? "border-border bg-surface" : "border-dashed border-border opacity-70 hover:opacity-100"
+                }`}
+              >
+                <AchievementBadge
+                  emoji={b.emoji}
+                  label={b.name}
+                  tier={tierFor(b.id)}
+                  locked={!has}
+                  size={60}
+                  title={`${b.name} — ${b.description}`}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      </section>
     </div>
   );
 }

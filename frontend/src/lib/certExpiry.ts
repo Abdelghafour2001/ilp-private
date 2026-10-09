@@ -26,9 +26,10 @@ export function expiryState(expiresOn: string | null | undefined): ExpiryState |
   return "valid";
 }
 
-export const EXPIRY_BADGE: Record<Exclude<ExpiryState, "valid">, { label: string; className: string }> = {
-  soon: { label: "⏳ Expire bientôt", className: "bg-warn/15 text-warn" },
-  expired: { label: "⚠ Expirée", className: "bg-bad/15 text-bad" },
+/** Colours only: the wording is translated where the badge is drawn. */
+export const EXPIRY_BADGE: Record<Exclude<ExpiryState, "valid">, { className: string }> = {
+  soon: { className: "bg-warn/15 text-warn" },
+  expired: { className: "bg-bad/15 text-bad" },
 };
 
 export function isExpiringWithinDays(expiresOn: string | null | undefined, withinDays: number): boolean {

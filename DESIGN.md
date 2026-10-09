@@ -248,6 +248,12 @@ Everything lives in `components/form/`; use it instead of bare inputs.
 - Multi-step builders (course, training) use the same pieces plus step pills in
   the header; a step can't be skipped while the one before it is blocked.
 
+### Steppers (pathways, lesson outlines)
+A vertical line joining numbered circles: done = filled `good` with a check,
+current/next = accent ring, locked = `lock` icon on `surface-2` with the reason
+in `text-subtle` (never orange: locked is a state, not an error). The next
+actionable step also gets a "Next up" callout linking straight to it.
+
 ### Lesson players
 Outline as a stepper on the left (done / current / to do), a reading column
 capped at ~70ch with 15px body text, a slim progress bar in the header,
@@ -264,6 +270,26 @@ Players open on the first lesson not yet done.
   `aria-label`) for destructive ones, which still confirm.
 - An action that needs a choice opens one Modal with the choice inside it. It
   never depends on a control somewhere else on the page.
+
+### Headline figures
+Use `components/StatStrip.tsx`: one panel of hairline-divided cells, not a grid
+of separate cards. Group related figures under one short title ("People",
+"Learning") instead of one strip of twelve. Labels are sentence case with an
+optional icon, never an emoji. Values are plain `text`. Only figures someone
+must act on take a tone (`bad` for overdue, `warn` for struggling), and only
+when they are non-zero.
+
+### Section tabs
+Underline tabs: a `role="tablist"` row with `border-b border-border`. Each tab
+is a `-mb-px border-b-2` button with an icon and `aria-selected`. The active
+tab gets `border-accent text-text`. Pills (`Segmented`) are for choosing a
+value (filter, period, source), not for switching between page sections.
+
+### Settings
+Two columns from `md` up: the section title and one line of context on the
+left (`15rem`), the controls in a `panel` on the right. Choices save on change
+and confirm in the header through `aria-live`. Use `Segmented` for short sets
+of options (language, theme, goal).
 
 ### Modal
 Use `components/Modal.tsx`, never a hand-rolled overlay. It portals to `<body>`,

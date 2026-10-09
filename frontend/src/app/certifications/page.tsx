@@ -12,7 +12,11 @@ import {
   type TeamMember,
 } from "@/lib/api";
 import { getStoredLearner } from "@/lib/learner";
-import { useT } from "@/lib/i18n";
+import { useFormat, useT } from "@/lib/i18n";
+import Icon from "@/components/Icon";
+import Field from "@/components/form/Field";
+import FileDrop from "@/components/form/FileDrop";
+import { Segmented } from "@/components/form/Field";
 import Modal from "@/components/Modal";
 import ExpiryBadge from "@/components/ExpiryBadge";
 import ListFilter, { useListFilter } from "@/components/ListFilter";
@@ -22,19 +26,24 @@ import Pager, { pageOf } from "@/components/Pager";
 // Who may add to the catalogue — mirrors `_can_curate` on the server.
 const CURATOR_ROLES = ["trainer", "manager", "bu_head", "hr", "hr_lead", "admin"];
 
-const LEVEL_BADGE: Record<string, string> = {
-  beginner: "bg-good/15 text-good",
-  intermediate: "bg-warn/15 text-warn",
-  advanced: "bg-bad/15 text-bad",
+const LEVEL_DOT: Record<string, string> = {
+  beginner: "bg-good",
+  intermediate: "bg-warn",
+  advanced: "bg-bad",
 };
 
-function fmtDate(d: string | null) {
-  if (!d) return "";
-  return new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+function initials(s: string) {
+  return s
+    .split(/[\s.]+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
 export default function CertificationsPage() {
   const t = useT();
+  const format = useFormat();
+  const fmtDate = (d: string | null) => (d ? format.date(d, { day: "numeric", month: "short", year: "numeric" }) : "");
   const [me, setMe] = useState<Learner | null>(null);
   const [catalog, setCatalog] = useState<Certification[]>([]);
   const [suggestions, setSuggestions] = useState<CertSuggestion[]>([]);
@@ -170,14 +179,6 @@ export default function CertificationsPage() {
       .catch(() => setMembers([]));
   }, [selected, canSuggest, suggestTeamId]);
 
-  // Esc closes the modal
-  useEffect(() => {
-    if (!selected) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeModal();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
   function closeModal() {
     setSelected(null);
     setRecNote("");
@@ -205,14 +206,14 @@ export default function CertificationsPage() {
 
   async function withdraw(s: CertSuggestion) {
     const what = s.team_name || s.target_handle;
-    if (!confirm(`Withdraw the suggestion "${s.certification.name}" for ${what}?`)) return;
+    if (!confirm(t("cert.confirmWithdraw", { name: s.certification.name, who: what ?? "" }))) return;
     await api.withdrawCertSuggestion(s.id, me?.id ?? undefined).catch((e) => setError(String(e)));
     refresh();
   }
 
   async function submitShare() {
     if (!me) {
-      setError("Pick a handle first (top-right) so the certificate has an owner.");
+      setError(t("form.hub.signIn"));
       return;
     }
     setBusy(true);
@@ -274,7 +275,7 @@ export default function CertificationsPage() {
   }
 
   async function removeEarned(e: EarnedCertificate) {
-    if (!confirm(`Remove "${e.title}" shared by ${e.handle}?`)) return;
+    if (!confirm(t("cert.confirmRemove", { title: e.title, who: e.name || e.handle }))) return;
     await api.deleteEarnedCertificate(e.id, me?.id ?? undefined).catch((err) => setError(String(err)));
     refresh();
   }
@@ -287,22 +288,26 @@ export default function CertificationsPage() {
 
   return (
     <div className="space-y-6">
-      {/* header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Certifications</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            The team&apos;s certification catalog, your leads&apos; suggestions, and who earned what —
-            achievements in the open, not buried in inboxes.
-          </p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">{t("certs.title")}</h1>
+          <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-text-muted">{t("cert.lede")}</p>
         </div>
-        <button className="btn" onClick={() => setSharing((v) => !v)}>
-          {sharing ? "Close" : "🏅 Share a certificate"}
+        <button type="button" className="btn" onClick={() => setSharing(true)}>
+          <Icon name="award" size={16} /> {t("cert.shareBtn")}
         </button>
-      </div>
+      </header>
 
-      {error && <div className="card border-bad/40 text-sm text-bad">{error}</div>}
-      {notice && <div className="card border-good/40 text-sm text-good">{notice}</div>}
+      {error && (
+        <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-text-muted">
+          <Icon name="check" size={15} className="text-good" /> {notice}
+        </p>
+      )}
 
       {/* Declaring a certificate is a dialog: the form used to open above the
           catalogue and push it off the screen while somebody filled it in. */}
@@ -321,94 +326,92 @@ export default function CertificationsPage() {
                 disabled={busy || (!share.title.trim() && !share.certification_id)}
                 onClick={submitShare}
               >
-                {busy ? "Sharing…" : "Share it 🎉"}
+                {busy ? t("cert.sharing") : t("cert.shareIt")}
               </button>
             </>
           }
         >
-          <div className="grid gap-2 sm:grid-cols-2">
+          <Field id="sh-cat" label={t("cert.f.which")} hint={t("cert.f.whichHint")}>
             <select
+              id="sh-cat"
               className="input"
               value={share.certification_id}
               onChange={(e) => setShare({ ...share, certification_id: e.target.value })}
             >
-              <option value="">{t("certs.fromCatalog")}</option>
+              <option value="">{t("cert.f.notInCatalog")}</option>
               {catalog.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                  {c.provider ? ` — ${c.provider}` : ""}
                 </option>
               ))}
             </select>
-            <input
-              className="input"
-              placeholder={share.certification_id ? "Title (optional — catalog name used)" : "Certificate title"}
-              value={share.title}
-              onChange={(e) => setShare({ ...share, title: e.target.value })}
-            />
-            <input
-              className="input"
-              placeholder={t("certs.issuer")}
-              value={share.issuer}
-              onChange={(e) => setShare({ ...share, issuer: e.target.value })}
-            />
-            <input
-              className="input"
-              type="date"
-              title={t("certs.obtainedOn")}
-              value={share.obtained_on}
-              onChange={(e) => setShare({ ...share, obtained_on: e.target.value })}
-            />
-            <input
-              className="input"
-              type="date"
-              title={t("certs.validUntil")}
-              value={share.expires_on}
-              onChange={(e) => setShare({ ...share, expires_on: e.target.value })}
-            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="sh-title" label={t("cert.f.title")} optional={share.certification_id ? t("cert.f.catalogName") : false}>
+              <input
+                id="sh-title"
+                className="input"
+                autoComplete="off"
+                placeholder="Azure Data Fundamentals (DP-900)"
+                value={share.title}
+                onChange={(e) => setShare({ ...share, title: e.target.value })}
+              />
+            </Field>
+            <Field id="sh-issuer" label={t("cert.f.issuer")} optional>
+              <input id="sh-issuer" className="input" autoComplete="off" placeholder="Microsoft" value={share.issuer} onChange={(e) => setShare({ ...share, issuer: e.target.value })} />
+            </Field>
+            <Field id="sh-obtained" label={t("certs.obtainedOn")} optional>
+              <input id="sh-obtained" className="input" type="date" value={share.obtained_on} onChange={(e) => setShare({ ...share, obtained_on: e.target.value })} />
+            </Field>
+            <Field id="sh-expires" label={t("cert.f.expires")} optional hint={t("cert.f.expiresHint")}>
+              <input id="sh-expires" className="input" type="date" min={share.obtained_on || undefined} value={share.expires_on} onChange={(e) => setShare({ ...share, expires_on: e.target.value })} />
+            </Field>
           </div>
-          <p className="text-xs text-text-subtle">
-            Valide jusqu&apos;au (optionnel) — laissez vide si la certification n&apos;expire pas.
-          </p>
-          <input
-            className="input"
-            placeholder={t("certs.credentialUrl")}
-            value={share.credential_url}
-            onChange={(e) => setShare({ ...share, credential_url: e.target.value })}
-          />
-          <label className="block text-xs text-text-subtle">
-            {t("certs.file")}
+          <Field id="sh-url" label={t("cert.f.url")} optional hint={t("cert.f.urlHint")}>
             <input
-              className="mt-1 block w-full text-sm text-text-subtle file:mr-3 file:rounded-lg file:border-0 file:bg-edge file:px-3 file:py-2 file:text-text"
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              id="sh-url"
+              className="input"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="https://www.credly.com/badges/…"
+              value={share.credential_url}
+              onChange={(e) => setShare({ ...share, credential_url: e.target.value })}
             />
-          </label>
+          </Field>
+          <Field id="sh-file" label={t("cert.f.file")} optional>
+            <FileDrop
+              id="sh-file"
+              file={file}
+              onChange={setFile}
+              accept=".pdf,.png,.jpg,.jpeg,.webp"
+              maxMb={10}
+              label={t("cert.f.drop")}
+              hint={t("cert.f.dropHint")}
+            />
+          </Field>
         </Modal>
       )}
 
       {/* personal recommendations */}
       {personal.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-accent-text">
-            🎯 Recommended for you
-          </p>
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            <Icon name="sparkles" size={16} className="text-accent-text" /> {t("cert.forYou")}
+          </h2>
           <div className="grid gap-3 md:grid-cols-2">
             {personal.map((s) => (
-              <div key={s.id} className="card space-y-1.5 border-accent/40 shadow-glow">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{s.certification.name}</p>
-                  <span className={`badge ${LEVEL_BADGE[s.certification.level] ?? "bg-edge"}`}>
-                    {s.certification.level}
-                  </span>
-                </div>
-                {s.note && <p className="text-sm text-text-muted">“{s.note}”</p>}
+              <div key={s.id} className="panel space-y-1.5 border-accent/40 p-5 shadow-glow">
+                <CertTitle name={s.certification.name} level={s.certification.level} provider={s.certification.provider} />
+                {s.note && <blockquote className="border-l-2 border-accent/40 pl-3 text-sm italic text-text-muted">{s.note}</blockquote>}
                 <p className="text-xs text-text-subtle">
-                  {t("certs.pickedFor")} <strong className="text-text">{s.suggested_by_name}</strong>
+                  {t("certs.pickedFor")} <span className="font-medium text-text">{s.suggested_by_name}</span>
                 </p>
                 {s.certification.url && (
-                  <a href={s.certification.url} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
-                    {t("certs.about")}
+                  <a href={s.certification.url} target="_blank" rel="noreferrer" className="link inline-flex items-center gap-1 text-xs">
+                    {t("cert.about")} <Icon name="external" size={11} />
                   </a>
                 )}
               </div>
@@ -420,35 +423,25 @@ export default function CertificationsPage() {
       {/* suggestions for my team(s) */}
       {teamSugg.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            📌 Suggested for your team
-          </p>
+          <h2 className="text-base font-semibold">{t("cert.forTeam")}</h2>
           <div className="grid gap-3 md:grid-cols-2">
             {teamSugg.map((s) => (
-              <div key={s.id} className="card space-y-1.5 border-accent/30">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{s.certification.name}</p>
-                  <span className={`badge ${LEVEL_BADGE[s.certification.level] ?? "bg-edge"}`}>
-                    {s.certification.level}
-                  </span>
-                  {s.certification.provider && (
-                    <span className="badge bg-edge text-text-subtle">{s.certification.provider}</span>
-                  )}
-                </div>
-                {s.note && <p className="text-sm text-text-muted">“{s.note}”</p>}
+              <div key={s.id} className="panel flex flex-col gap-1.5 p-5">
+                <CertTitle name={s.certification.name} level={s.certification.level} provider={s.certification.provider} />
+                {s.note && <blockquote className="border-l-2 border-border-strong pl-3 text-sm italic text-text-muted">{s.note}</blockquote>}
                 <p className="text-xs text-text-subtle">
-                  For <strong className="text-text">{s.team_name}</strong> · suggested by {s.suggested_by_name}
+                  {t("cert.forTeamBy", { team: s.team_name ?? "", who: s.suggested_by_name })}
                 </p>
-                <div className="flex gap-3 text-xs">
+                <div className="mt-auto flex items-center gap-3 pt-1 text-xs">
                   {s.certification.url && (
-                    <a href={s.certification.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                      About this certification ↗
+                    <a href={s.certification.url} target="_blank" rel="noreferrer" className="link inline-flex items-center gap-1">
+                      {t("cert.about")} <Icon name="external" size={11} />
                     </a>
                   )}
                   {(me?.role === "admin" || me?.role === "hr" ||
                     s.suggested_by_name === (me?.handle ?? "")) && (
-                    <button className="text-bad hover:underline" onClick={() => withdraw(s)}>
-                      withdraw
+                    <button type="button" className="ml-auto text-text-subtle hover:text-bad" onClick={() => withdraw(s)}>
+                      {t("cert.withdraw")}
                     </button>
                   )}
                 </div>
@@ -461,85 +454,112 @@ export default function CertificationsPage() {
       {/* catalog */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            📚 {t("certs.catalogTitle")}
-          </p>
+          <h2 className="text-base font-semibold">{t("cert.catalog")}</h2>
           <div className="flex items-center gap-2">
             {canSuggest && myTeams.length > 1 && (
               <select
-                className="input max-w-[220px] py-1 text-xs"
+                className="input w-auto max-w-[240px] py-1.5 text-sm"
+                aria-label={t("certs.actingFor")}
                 title={t("certs.actingFor")}
                 value={suggestTeamId ?? ""}
                 onChange={(e) => setSuggestTeamId(Number(e.target.value))}
               >
                 {myTeams.map((t) => (
                   <option key={t.id} value={t.id}>
-                    → {t.name}
+                    {t.name}
                   </option>
                 ))}
               </select>
             )}
             {canCurate && (
-              <button className="btn-ghost btn-sm" onClick={() => setAdding((v) => !v)}>
-                {adding ? "Close" : "+ Add to catalog"}
+              <button type="button" className="btn-ghost btn-sm" onClick={() => setAdding(true)}>
+                <Icon name="plus" size={14} /> {t("cert.addToCatalog")}
               </button>
             )}
           </div>
         </div>
 
         {adding && (
-          <div className="card space-y-2">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input className="input" placeholder={t("certs.name")} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-              <input className="input" placeholder={t("certs.provider")} value={draft.provider} onChange={(e) => setDraft({ ...draft, provider: e.target.value })} />
-              <select className="input" value={draft.level} onChange={(e) => setDraft({ ...draft, level: e.target.value })}>
-                <option value="beginner">beginner</option>
-                <option value="intermediate">intermediate</option>
-                <option value="advanced">advanced</option>
-              </select>
-              <input className="input" placeholder={t("certs.infoUrl")} value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
+          <Modal
+            title={t("cert.addToCatalog")}
+            lede={t("cert.addLede")}
+            size="md"
+            onClose={() => setAdding(false)}
+            footer={
+              <>
+                <button type="button" className="btn-ghost" onClick={() => setAdding(false)}>
+                  {t("common.cancel")}
+                </button>
+                <button type="button" className="btn" disabled={busy || !draft.name.trim()} onClick={addToCatalog}>
+                  {t("certs.add")}
+                </button>
+              </>
+            }
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="cc-name" label={t("cert.f.name")} className="sm:col-span-2">
+                <input id="cc-name" className="input" autoComplete="off" autoFocus placeholder="Databricks Data Engineer Associate" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              </Field>
+              <Field id="cc-provider" label={t("cert.f.provider")} optional>
+                <input id="cc-provider" className="input" autoComplete="off" placeholder="Databricks" value={draft.provider} onChange={(e) => setDraft({ ...draft, provider: e.target.value })} />
+              </Field>
+              <div>
+                <p className="mb-1.5 text-sm font-medium">{t("cb.f.level")}</p>
+                <Segmented
+                  label={t("cb.f.level")}
+                  value={draft.level as "beginner"}
+                  onChange={(level) => setDraft({ ...draft, level })}
+                  options={(["beginner", "intermediate", "advanced"] as const).map((l) => ({
+                    value: l as "beginner",
+                    label: <span className="capitalize">{t(`common.${l}`, l)}</span>,
+                  }))}
+                />
+              </div>
+              <Field id="cc-desc" label={t("cert.f.why")} optional className="sm:col-span-2">
+                <input id="cc-desc" className="input" autoComplete="off" placeholder={t("certs.oneLine")} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+              </Field>
+              <Field id="cc-url" label={t("cert.f.info")} optional className="sm:col-span-2">
+                <input id="cc-url" className="input" type="url" inputMode="url" spellCheck={false} placeholder="https://…" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
+              </Field>
             </div>
-            <input className="input" placeholder={t("certs.oneLine")} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
             {/* Compliance side: a client-required certification that lapses is
                 a contractual problem, not just a missed learning opportunity. */}
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border px-3 py-2">
-              <label className="flex items-center gap-2 text-sm text-text-muted">
+            <div className="space-y-3 rounded-xl border border-border p-4">
+              <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-[rgb(var(--accent))]"
                   checked={draft.client_required}
                   onChange={(e) => setDraft({ ...draft, client_required: e.target.checked })}
                 />
-                {t("certs.clientRequiredToggle")}
+                <span>
+                  <span className="block text-sm font-medium">{t("certs.clientRequiredToggle")}</span>
+                  <span className="block text-xs text-text-subtle">{t("certs.clientRequiredHint")}</span>
+                </span>
               </label>
-              {draft.client_required && (
-                <input
-                  className="input max-w-[220px] py-1 text-sm"
-                  placeholder={t("certs.clientNamePlaceholder")}
-                  value={draft.client_name}
-                  onChange={(e) => setDraft({ ...draft, client_name: e.target.value })}
-                />
-              )}
-              <label className="flex items-center gap-2 text-sm text-text-muted">
-                {t("certs.validity")}
-                <input
-                  type="number"
-                  min={0}
-                  className="input w-20 py-1 text-sm"
-                  value={draft.validity_months}
-                  onChange={(e) =>
-                    setDraft({ ...draft, validity_months: Number(e.target.value) || 0 })
-                  }
-                />
-                {t("certs.months")}
-              </label>
-              <span className="text-xs text-text-subtle">
-                {t("certs.validityHint")}
-              </span>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {draft.client_required && (
+                  <Field id="cc-client" label={t("cert.f.client")}>
+                    <input id="cc-client" className="input" autoComplete="off" placeholder={t("certs.clientNamePlaceholder")} value={draft.client_name} onChange={(e) => setDraft({ ...draft, client_name: e.target.value })} />
+                  </Field>
+                )}
+                <Field id="cc-validity" label={t("certs.validity")} hint={t("certs.validityHint")}>
+                  <div className="relative">
+                    <input
+                      id="cc-validity"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      className="input pr-20"
+                      value={draft.validity_months}
+                      onChange={(e) => setDraft({ ...draft, validity_months: Number(e.target.value) || 0 })}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-subtle">{t("certs.months")}</span>
+                  </div>
+                </Field>
+              </div>
             </div>
-            <button className="btn-soft" disabled={busy || !draft.name.trim()} onClick={addToCatalog}>
-              {t("certs.add")}
-            </button>
-          </div>
+          </Modal>
         )}
 
         {catalog.length > 0 && (
@@ -552,7 +572,7 @@ export default function CertificationsPage() {
         )}
 
         {catalogFilter.filtered.length === 0 && (
-          <div className="card text-center text-sm text-text-subtle">
+          <div className="rounded-xl border border-dashed border-border-strong px-6 py-10 text-center text-sm text-text-muted">
             {catalog.length ? t("filter.noMatch") : t("certs.catalogEmpty")}
           </div>
         )}
@@ -560,44 +580,50 @@ export default function CertificationsPage() {
           {pageOf(catalogFilter.filtered, catalogPage).map((c) => (
             <button
               key={c.id}
+              type="button"
               onClick={() => setSelected(c)}
-              className="card flex h-full flex-col gap-2 text-left transition hover:border-accent hover:shadow-sm"
+              className="group flex h-full flex-col rounded-xl border border-border bg-surface p-5 text-left shadow-xs transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md"
             >
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold leading-snug">{c.name}</p>
-                <span className={`badge shrink-0 ${LEVEL_BADGE[c.level] ?? "bg-edge"}`}>{c.level}</span>
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-text-muted transition-colors group-hover:bg-accent/10 group-hover:text-accent-text">
+                  <Icon name="award" size={18} />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold leading-snug group-hover:text-accent-text">{c.name}</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-subtle">
+                    <span className={`h-1.5 w-1.5 rounded-full ${LEVEL_DOT[c.level] ?? "bg-text-subtle"}`} />
+                    <span className="capitalize">{t(`common.${c.level}`, c.level)}</span>
+                    {c.provider && (
+                      <>
+                        <span>·</span>
+                        <span>{c.provider}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
               </div>
 
-              <p className="text-xs text-text-subtle">{c.provider || "—"}</p>
+              {c.description && <p className="mt-3 line-clamp-2 text-sm text-text-muted">{c.description}</p>}
 
-              {c.description && (
-                <p className="line-clamp-2 text-sm text-text-muted">{c.description}</p>
-              )}
-
-              <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+              <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-4 text-xs">
                 {c.client_required && (
-                  <span
-                    className="badge bg-warn/15 text-warn"
-                    title={t("certs.clientRequiredHint")}
-                  >
-                    {c.client_name
-                      ? t("certs.clientRequiredNamed", { client: c.client_name })
-                      : t("certs.clientRequired")}
+                  <span className="badge badge-warn" title={t("certs.clientRequiredHint")}>
+                    {c.client_name ? t("certs.clientRequiredNamed", { client: c.client_name }) : t("certs.clientRequired")}
                   </span>
                 )}
                 {c.validity_months > 0 && (
-                  <span className="badge bg-edge text-text-subtle">
-                    ♻️ {t("certs.validFor", { count: c.validity_months })}
+                  <span className="inline-flex items-center gap-1 text-text-subtle">
+                    <Icon name="clock" size={12} /> {t("certs.validFor", { count: c.validity_months })}
                   </span>
                 )}
                 {c.earned_count > 0 && (
-                  <span className="badge bg-good/15 text-good">
-                    🏅 {t("certs.earnedHere", { count: c.earned_count })}
+                  <span className="inline-flex items-center gap-1 text-good">
+                    <Icon name="check" size={12} /> {t("certs.earnedHere", { count: c.earned_count })}
                   </span>
                 )}
                 {suggestedIds.has(c.id) && (
-                  <span className="badge bg-accent/15 text-accent-text">
-                    📌 {t("certs.suggested")}
+                  <span className="inline-flex items-center gap-1 text-accent-text">
+                    <Icon name="team" size={12} /> {t("certs.suggested")}
                   </span>
                 )}
               </div>
@@ -610,19 +636,22 @@ export default function CertificationsPage() {
       {/* follow-up: expiring or recently lapsed, within the viewer's scope */}
       {isOverseer && expiring.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-warn">
-            ⏳ {t("certs.expiringSoon")}
-            {scopeLabel && <span className="ml-2 normal-case text-text-subtle">· {scopeLabel}</span>}
-          </p>
-          <div className="space-y-2">
+          <h2 className="flex flex-wrap items-baseline gap-2 text-base font-semibold">
+            <Icon name="clock" size={16} className="self-center text-warn" /> {t("certs.expiringSoon")}
+            {scopeLabel && <span className="text-xs font-normal text-text-subtle">{scopeLabel}</span>}
+          </h2>
+          <div className="panel divide-y divide-border overflow-hidden border-warn/30">
             {expiring.map((e) => (
-              <div key={`soon-${e.id}`} className="card flex flex-wrap items-center gap-3 border-warn/30 py-3">
-                <span className="text-2xl">🏅</span>
+              <div key={`soon-${e.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-warn/10 text-xs font-semibold text-warn">
+                  {initials(e.name || e.handle)}
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-sm">
                     <span>
-                      <strong>{e.name || e.handle}</strong> ·{" "}
-                      <strong className="text-accent">{e.title}</strong>
+                      <span className="font-medium">{e.name || e.handle}</span>
+                      <span className="text-text-subtle"> · </span>
+                      <span className="font-medium text-text">{e.title}</span>
                       {e.issuer && <span className="text-text-muted"> · {e.issuer}</span>}
                     </span>
                     {e.client_required && (
@@ -648,12 +677,14 @@ export default function CertificationsPage() {
       {/* compliance: client-required certifications, who is covered and who is not */}
       {isOverseer && compliance.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            🛡️ {t("certs.compliance")}
-            {scopeLabel && <span className="ml-2 normal-case">· {scopeLabel}</span>}
-          </p>
-          <p className="text-xs text-text-subtle">{t("certs.complianceHint")}</p>
-          <div className="space-y-2">
+          <div>
+            <h2 className="flex flex-wrap items-baseline gap-2 text-base font-semibold">
+              <Icon name="admin" size={16} className="self-center text-text-muted" /> {t("certs.compliance")}
+              {scopeLabel && <span className="text-xs font-normal text-text-subtle">{scopeLabel}</span>}
+            </h2>
+            <p className="mt-1 max-w-[70ch] text-sm text-text-muted">{t("certs.complianceHint")}</p>
+          </div>
+          <div className="panel divide-y divide-border overflow-hidden">
             {compliance.map((row) => {
               const open = openCompliance === row.certification_id;
               const buckets: [string, string, typeof row.valid][] = [
@@ -663,9 +694,10 @@ export default function CertificationsPage() {
                 ["certs.bucket.valid", "bg-good/15 text-good", row.valid],
               ];
               return (
-                <div key={row.certification_id} className="card space-y-2 py-3">
+                <div key={row.certification_id} className="space-y-3 px-5 py-3.5">
                   <button
                     type="button"
+                    aria-expanded={open}
                     className="flex w-full flex-wrap items-center gap-2 text-left"
                     onClick={() => setOpenCompliance(open ? null : row.certification_id)}
                   >
@@ -682,7 +714,7 @@ export default function CertificationsPage() {
                         </span>
                       ) : null,
                     )}
-                    <span className="text-xs text-text-subtle">{open ? "▲" : "▼"}</span>
+                    <Icon name="chevron-down" size={15} className={`text-text-subtle transition-transform ${open ? "rotate-180" : ""}`} />
                   </button>
                   {!row.audience_defined && (
                     <p className="text-xs text-text-subtle">{t("certs.noAudience")}</p>
@@ -693,9 +725,7 @@ export default function CertificationsPage() {
                         .filter(([, , people]) => people.length > 0)
                         .map(([key, , people]) => (
                           <div key={key}>
-                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-subtle">
-                              {t(key)}
-                            </p>
+                            <p className="mb-1 text-xs font-medium capitalize text-text-subtle">{t(key)}</p>
                             <ul className="space-y-0.5 text-sm">
                               {people.map((p) => (
                                 <li key={p.learner_id} className="flex justify-between gap-2">
@@ -723,169 +753,175 @@ export default function CertificationsPage() {
       )}
 
       {/* recently shared */}
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-          🎉 Recently earned
-        </p>
-        {feed.length === 0 && (
-          <div className="card text-center text-sm text-text-subtle">
-            {t("certs.empty")}
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold">{t("cert.recent")}</h2>
+        {feed.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border-strong px-6 py-10 text-center text-sm text-text-muted">
+            {t("cert.emptyFeed")}
           </div>
-        )}
-        <div className="space-y-2">
-          {pageOf(feed, feedPage).map((e) => (
-            <div key={e.id} className="card flex flex-wrap items-center gap-3 py-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/15 text-xs font-semibold text-accent-text">
-                {(e.name || e.handle)
-                  .split(/[\s.]+/)
-                  .slice(0, 2)
-                  .map((part) => part[0]?.toUpperCase() ?? "")
-                  .join("")}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm">
-                  <strong>{e.name || e.handle}</strong> earned{" "}
-                  <strong className="text-accent">{e.title}</strong>
-                  {e.issuer && <span className="text-text-muted"> · {e.issuer}</span>}
-                  <span className="ml-2 inline-flex align-middle">
+        ) : (
+          <ul className="panel divide-y divide-border overflow-hidden">
+            {pageOf(feed, feedPage).map((e) => (
+              <li key={e.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent/10 text-xs font-semibold text-accent-text" aria-hidden="true">
+                  {initials(e.name || e.handle)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+                    <span>{t("cert.earned", { who: e.name || e.handle })}</span>
+                    <span className="font-semibold text-text">{e.title}</span>
+                    {e.issuer && <span className="text-text-muted">· {e.issuer}</span>}
                     <ExpiryBadge expiresOn={e.expires_on} />
-                  </span>
-                </p>
-                <p className="text-xs text-text-subtle">
-                  {e.obtained_on ? fmtDate(e.obtained_on) : fmtDate(e.created_at)}
-                  {e.expires_on && (
-                    <span> · valide jusqu&apos;au {fmtDate(e.expires_on)}</span>
-                  )}
-                  {e.team_name && ` · ${e.team_name}`}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 text-xs">
-                {e.has_file && (
-                  <a href={api.certificateFileUrl(e.id)} target="_blank" rel="noreferrer" className="btn-soft btn-sm">
-                    {t("certs.view")}
-                  </a>
-                )}
-                {e.credential_url && (
-                  <a href={e.credential_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                    {t("certs.verify")}
-                  </a>
-                )}
-                {(me?.id === e.learner_id || me?.role === "admin") && (
-                  <button className="text-bad hover:underline" onClick={() => removeEarned(e)}>
-                    remove
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        <Pager page={feedPage} total={feed.length} onPage={setFeedPage} />
-      </div>
-
-      {/* ---- certification detail modal — click outside (or Esc) to dismiss ---- */}
-      {selected && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm"
-          onClick={closeModal}
-        >
-          <div
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto animate-scale-in rounded-2xl border border-border bg-surface p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label={selected.name}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <span className="text-4xl">🎖️</span>
-              <button className="btn-icon" aria-label={t("common.close")} onClick={closeModal}>
-                ✕
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-semibold">{selected.name}</h2>
-              <span className={`badge ${LEVEL_BADGE[selected.level] ?? "bg-edge"}`}>{selected.level}</span>
-            </div>
-            <p className="mt-1 text-sm text-text-subtle">
-              {selected.provider && <>by <strong className="text-text">{selected.provider}</strong> · </>}
-              added by {selected.added_by_name}
-              {selected.earned_count > 0 && (
-                <span className="ml-1 text-good">· 🏅 {selected.earned_count} earned here</span>
-              )}
-            </p>
-            {selected.description && (
-              <p className="mt-3 text-sm text-text-muted">{selected.description}</p>
-            )}
-            {selected.url && (
-              <a
-                href={selected.url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-block text-sm text-accent hover:underline"
-              >
-                {t("certs.official")}
-              </a>
-            )}
-
-            {/* recommend controls — leads / managers / HR */}
-            {canSuggest && (
-              <div className="mt-5 space-y-3 border-t border-border pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-                  📌 Recommend it
-                </p>
-                <input
-                  className="input"
-                  placeholder={t("certs.noteWhy")}
-                  value={recNote}
-                  onChange={(e) => setRecNote(e.target.value)}
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    className="btn-soft btn-sm"
-                    disabled={busy || !suggestTeamId || suggestedIds.has(selected.id)}
-                    onClick={() => doSuggest(selected, { teamId: suggestTeamId })}
-                  >
-                    {suggestedIds.has(selected.id) ? "✓ suggested to team" : "Suggest to whole team"}
-                  </button>
-                  <button
-                    className="btn btn-sm"
-                    disabled={busy || recTargets.length === 0}
-                    onClick={() => doSuggest(selected, { targetIds: recTargets })}
-                  >
-                    Recommend to {recTargets.length || "…"} selected
-                  </button>
+                  </p>
+                  <p className="mt-0.5 text-xs text-text-subtle tnum">
+                    {e.obtained_on ? fmtDate(e.obtained_on) : fmtDate(e.created_at)}
+                    {e.expires_on && <span> · {t("certs.validUntil", { date: fmtDate(e.expires_on) })}</span>}
+                    {e.team_name && ` · ${e.team_name}`}
+                  </p>
                 </div>
-                {members.length > 0 ? (
+                <div className="flex items-center gap-1.5">
+                  {e.has_file && (
+                    <a href={api.certificateFileUrl(e.id)} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
+                      <Icon name="file" size={13} /> {t("certs.view")}
+                    </a>
+                  )}
+                  {e.credential_url && (
+                    <a href={e.credential_url} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
+                      {t("cert.verify")} <Icon name="external" size={12} />
+                    </a>
+                  )}
+                  {(me?.id === e.learner_id || me?.role === "admin") && (
+                    <button
+                      type="button"
+                      className="grid h-8 w-8 place-items-center rounded-md text-text-subtle hover:bg-bad/10 hover:text-bad"
+                      aria-label={t("cert.removeOne", { title: e.title })}
+                      title={t("cert.removeOne", { title: e.title })}
+                      onClick={() => removeEarned(e)}
+                    >
+                      <Icon name="trash" size={14} />
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Pager page={feedPage} total={feed.length} onPage={setFeedPage} />
+      </section>
+
+      {/* ---- certification detail ---- */}
+      {selected && (
+        <Modal
+          title={selected.name}
+          lede={[selected.provider, t("cert.addedBy", { who: selected.added_by_name })].filter(Boolean).join(" · ")}
+          size="md"
+          onClose={closeModal}
+        >
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="inline-flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${LEVEL_DOT[selected.level] ?? "bg-text-subtle"}`} />
+              <span className="capitalize">{t(`common.${selected.level}`, selected.level)}</span>
+            </span>
+            {selected.validity_months > 0 && (
+              <span className="inline-flex items-center gap-1 text-text-muted">
+                <Icon name="clock" size={13} /> {t("certs.validFor", { count: selected.validity_months })}
+              </span>
+            )}
+            {selected.earned_count > 0 && (
+              <span className="inline-flex items-center gap-1 text-good">
+                <Icon name="check" size={13} /> {t("certs.earnedHere", { count: selected.earned_count })}
+              </span>
+            )}
+          </p>
+          {selected.description && <p className="text-sm leading-relaxed text-text-muted">{selected.description}</p>}
+          {selected.url && (
+            <a href={selected.url} target="_blank" rel="noreferrer" className="link inline-flex items-center gap-1 text-sm">
+              {t("cert.official")} <Icon name="external" size={13} />
+            </a>
+          )}
+
+          {/* recommend controls — leads / managers / HR */}
+          {canSuggest && (
+            <div className="space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold">{t("cert.recommend")}</h3>
+              <Field id="rec-note" label={t("cert.f.note")} optional>
+                <input id="rec-note" className="input" autoComplete="off" placeholder={t("certs.noteWhy")} value={recNote} onChange={(e) => setRecNote(e.target.value)} />
+              </Field>
+              {members.length > 0 ? (
+                <div>
+                  <p className="mb-1.5 text-sm font-medium">{t("cert.f.who")}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {members.map((m) => {
                       const on = recTargets.includes(m.learner_id);
                       return (
                         <button
                           key={m.learner_id}
+                          type="button"
+                          aria-pressed={on}
                           onClick={() =>
-                            setRecTargets((cur) =>
-                              on ? cur.filter((id) => id !== m.learner_id) : [...cur, m.learner_id],
-                            )
+                            setRecTargets((cur) => (on ? cur.filter((id) => id !== m.learner_id) : [...cur, m.learner_id]))
                           }
-                          className={`rounded-full border px-3 py-1 text-xs transition ${
-                            on
-                              ? "border-accent bg-accent/15 font-medium text-accent-text"
-                              : "border-border text-text-subtle hover:text-text"
+                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors ${
+                            on ? "border-accent bg-accent/10 font-medium text-accent-text" : "border-border text-text-muted hover:border-border-strong hover:text-text"
                           }`}
                         >
-                          {on ? "✓ " : ""}
+                          {on && <Icon name="check" size={11} strokeWidth={2.5} />}
                           {m.name || m.handle}
                         </button>
                       );
                     })}
                   </div>
-                ) : (
-                  <p className="text-xs text-text-subtle">{t("certs.noTeam")}</p>
-                )}
+                </div>
+              ) : (
+                <p className="text-xs text-text-subtle">{t("certs.noTeam")}</p>
+              )}
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={busy || !suggestTeamId || suggestedIds.has(selected.id)}
+                  onClick={() => doSuggest(selected, { teamId: suggestTeamId })}
+                >
+                  {suggestedIds.has(selected.id) ? (
+                    <>
+                      <Icon name="check" size={14} /> {t("cert.suggestedTeam")}
+                    </>
+                  ) : (
+                    t("cert.suggestTeam")
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={busy || recTargets.length === 0}
+                  onClick={() => doSuggest(selected, { targetIds: recTargets })}
+                >
+                  {recTargets.length ? t("cert.recommendTo", { n: recTargets.length }) : t("cert.pickPeople")}
+                </button>
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </Modal>
       )}
+    </div>
+  );
+}
+
+function CertTitle({ name, level, provider }: { name: string; level: string; provider?: string | null }) {
+  const t = useT();
+  return (
+    <div>
+      <p className="font-semibold leading-snug">{name}</p>
+      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-subtle">
+        <span className={`h-1.5 w-1.5 rounded-full ${LEVEL_DOT[level] ?? "bg-text-subtle"}`} />
+        <span className="capitalize">{t(`common.${level}`, level)}</span>
+        {provider && (
+          <>
+            <span>·</span>
+            <span>{provider}</span>
+          </>
+        )}
+      </p>
     </div>
   );
 }
