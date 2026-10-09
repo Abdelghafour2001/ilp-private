@@ -1,5 +1,5 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import AppShell from "@/components/AppShell";
 import { LocaleProvider } from "@/lib/i18n";
@@ -21,6 +21,14 @@ export const metadata: Metadata = {
   title: "UpSkill — Learning & development",
   description:
     "Learn AI & data engineering by doing — interactive labs, a local toolbox, and an AI tutor.",
+};
+
+// Browser chrome (mobile address bar, PWA title bar) matches --bg per theme.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f8fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#090c11" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

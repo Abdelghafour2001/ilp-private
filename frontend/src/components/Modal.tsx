@@ -61,7 +61,7 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-4 backdrop-blur-sm sm:items-center"
       onClick={onClose}
       role="presentation"
     >
@@ -79,7 +79,7 @@ export default function Modal({
             {lede && <p className="mt-0.5 text-sm text-text-muted">{lede}</p>}
           </div>
           <button className="btn-ghost btn-sm shrink-0" onClick={onClose} aria-label="Close">
-            ✕
+            <span aria-hidden="true">✕</span>
           </button>
         </div>
 
