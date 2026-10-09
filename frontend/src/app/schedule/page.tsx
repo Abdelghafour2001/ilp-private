@@ -6,7 +6,10 @@ import { api, type Learner, type UpcomingEvent } from "@/lib/api";
 import { getStoredLearner } from "@/lib/learner";
 import { useFormat, useT } from "@/lib/i18n";
 import SessionsPanel from "@/components/SessionsPanel";
-import { LEVEL_BADGE } from "@/lib/formationLessons";
+import Icon from "@/components/Icon";
+import { Segmented } from "@/components/form/Field";
+
+const LEVEL_DOT: Record<string, string> = { beginner: "bg-good", intermediate: "bg-warn", advanced: "bg-bad" };
 
 const STATUS_BADGE: Record<string, { key: string; cls: string }> = {
   trainer: { key: "schedule.status.trainer", cls: "bg-accent/15 text-accent" },
@@ -34,7 +37,7 @@ export default function SchedulePage() {
   const t = useT();
   const fmt = useFormat();
 
-  /** "Today" / "Tomorrow", else the full weekday — in the chosen language. */
+  /** "Today" / "Tomorrow", else the weekday — in the chosen language. */
   const fmtDay = (iso: string) => {
     const d = new Date(iso);
     const today = new Date();
@@ -42,7 +45,7 @@ export default function SchedulePage() {
     tomorrow.setDate(today.getDate() + 1);
     if (d.toDateString() === today.toDateString()) return t("common.today");
     if (d.toDateString() === tomorrow.toDateString()) return t("common.tomorrow");
-    return fmt.date(iso, { weekday: "long", day: "numeric", month: "long" });
+    return fmt.date(iso, { weekday: "long" });
   };
 
   /** What the seat counter should say, given capacity and the waitlist. */
@@ -93,8 +96,21 @@ export default function SchedulePage() {
     }
   }
 
-  if (error && !events) return <div className="card border-bad/40 text-sm text-bad">{error}</div>;
-  if (!events) return <p className="text-sm text-text-subtle">{t("common.loading")}</p>;
+  if (error && !events)
+    return (
+      <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+        {error}
+      </p>
+    );
+  if (!events)
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <div className="h-9 w-48 skeleton" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-28 skeleton rounded-xl" />
+        ))}
+      </div>
+    );
 
   const shown = events.filter(
     (e) => (!onlyMine || e.my_status || e.my_registration) && (!onlyOpen || e.open_to_all),
@@ -104,162 +120,188 @@ export default function SchedulePage() {
     const k = dayKey(e.starts_at);
     byDay.set(k, [...(byDay.get(k) ?? []), e]);
   }
+  const todayKey = new Date().toDateString();
+  const filter: "all" | "mine" | "open" = onlyMine ? "mine" : onlyOpen ? "open" : "all";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{t("schedule.title")}</h1>
-          <p className="mt-1 text-sm text-text-muted">{t("schedule.subtitle")}</p>
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">{t("schedule.title")}</h1>
+          <p className="mt-2 max-w-[62ch] text-sm leading-relaxed text-text-muted">{t("schedule.subtitle")}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-text-muted">
-            <input
-              type="checkbox"
-              checked={onlyOpen}
-              onChange={(e) => setOnlyOpen(e.target.checked)}
-            />
-            {t("schedule.onlyOpen")}
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-text-muted">
-            <input
-              type="checkbox"
-              checked={onlyMine}
-              onChange={(e) => setOnlyMine(e.target.checked)}
-            />
-            {t("schedule.onlyMine")}
-          </label>
-        </div>
-      </div>
+        {/* One choice, not two checkboxes that could both be ticked into an
+            empty list nobody could explain. */}
+        <Segmented
+          label={t("sched.filter")}
+          value={filter}
+          onChange={(v) => {
+            setOnlyMine(v === "mine");
+            setOnlyOpen(v === "open");
+          }}
+          options={[
+            { value: "all" as const, label: t("sched.all") },
+            { value: "mine" as const, label: t("schedule.onlyMine") },
+            { value: "open" as const, label: t("schedule.onlyOpen") },
+          ]}
+        />
+      </header>
 
-      {error && <div className="card border-bad/40 text-sm text-bad">{error}</div>}
+      {error && (
+        <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+          {error}
+        </p>
+      )}
 
       {/* Organisers get the scheduling + attendance controls for open sessions
           right here, since that is where they already look at the calendar. */}
       {canOrganise && <SessionsPanel me={me} onChanged={refresh} />}
 
       {shown.length === 0 && (
-        <div className="card text-center text-sm text-text-subtle">
-          {onlyMine ? t("schedule.emptyMine") : t("schedule.empty")}
+        <div className="rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
+          <Icon name="calendar" size={22} className="mx-auto text-text-subtle" />
+          <p className="mt-3 text-sm text-text-muted">{onlyMine ? t("schedule.emptyMine") : t("schedule.empty")}</p>
         </div>
       )}
 
-      {[...byDay.entries()].map(([k, dayEvents]) => (
-        <div key={k} className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            {fmtDay(dayEvents[0].starts_at)}
-          </p>
-          <div className="space-y-2">
-            {dayEvents.map((e) => {
-              const badge = e.my_status ? STATUS_BADGE[e.my_status] : null;
-              const regBadge = e.my_registration ? REGISTRATION_BADGE[e.my_registration] : null;
-              const signedUp = e.my_registration === "registered" || e.my_registration === "waitlisted";
-              const full = e.seats_left === 0;
-              return (
-                <div key={e.id} className="card flex flex-wrap items-center gap-4">
-                  <div className="w-20 shrink-0 text-center">
-                    <p className="text-lg font-semibold">{fmt.time(e.starts_at)}</p>
-                    <p className="text-xs text-text-subtle">{e.duration_min} min</p>
-                  </div>
-                  <span className="text-3xl">{e.formation_emoji}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium">{e.title}</p>
-                      {e.formation_level && (
-                        <span className={`badge ${LEVEL_BADGE[e.formation_level] ?? "bg-edge"}`}>
-                          {e.formation_level}
-                        </span>
-                      )}
-                      {e.open_to_all && (
-                        <span className="badge bg-accent/15 text-accent-text">{t("schedule.openToAll")}</span>
-                      )}
-                      {e.theme && <span className="badge bg-edge text-text-subtle">{e.theme}</span>}
-                      {badge && <span className={`badge ${badge.cls}`}>{t(badge.key)}</span>}
-                      {regBadge && <span className={`badge ${regBadge.cls}`}>{t(regBadge.key)}</span>}
-                    </div>
-                    <p className="mt-0.5 truncate text-xs text-text-subtle">
-                      {e.formation_id ? (
-                        <Link
-                          href={`/formations/${e.formation_id}`}
-                          className="hover:text-text hover:underline"
-                        >
-                          {e.formation_title}
-                        </Link>
-                      ) : (
-                        <span>{t("schedule.openSession")}</span>
-                      )}
-                      {e.trainer_name && ` · ${t("common.by")} ${e.trainer_name}`}
-                      {e.location && ` · 📍 ${e.location}`}
-                    </p>
-                    {e.description && (
-                      <p className="mt-1 line-clamp-2 text-sm text-text-muted">{e.description}</p>
-                    )}
-                    {e.open_to_all && (
-                      <p className="mt-1 text-xs text-text-subtle">
-                        <span className={full ? "text-warn" : undefined}>{seatsLabel(e)}</span>
-                        {e.registration_deadline && (
-                          <span>
-                            {" · "}
-                            {t(
-                              e.registration_open
-                                ? "schedule.deadlineOpen"
-                                : "schedule.deadlineClosed",
-                              {
-                                date: fmt.date(e.registration_deadline, {
-                                  day: "numeric",
-                                  month: "short",
-                                }),
-                              },
-                            )}
-                          </span>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {/* One-way calendar export — imports into Outlook, Google
-                        or Apple Calendar. Not a mailbox sync. */}
-                    <a
-                      className="btn-ghost btn-sm"
-                      href={api.sessionIcsUrl(e.id)}
-                      title={t("schedule.addToCalendarHint")}
-                    >
-                      📅 {t("schedule.addToCalendar")}
-                    </a>
-                    {e.open_to_all && (
-                      <button
-                        className={signedUp ? "btn-ghost btn-sm" : "btn-soft btn-sm"}
-                        disabled={busyId === e.id || (!signedUp && !e.registration_open)}
-                        onClick={() => toggleRegistration(e)}
-                        title={
-                          !signedUp && !e.registration_open
-                            ? t("schedule.registrationsClosedHint")
-                            : full && !signedUp
-                              ? t("schedule.fullHint")
-                              : undefined
-                        }
-                      >
-                        {signedUp
-                          ? t("schedule.unregister")
-                          : !e.registration_open
-                            ? t("schedule.registrationsClosed")
-                            : full
-                              ? t("schedule.joinWaitlist")
-                              : t("schedule.register")}
-                      </button>
-                    )}
-                    {e.meeting_url && (
-                      <a href={e.meeting_url} target="_blank" rel="noreferrer" className="btn-soft btn-sm">
-                        {t("schedule.join")} ↗
-                      </a>
-                    )}
-                  </div>
+      <div className="space-y-8">
+        {[...byDay.entries()].map(([k, dayEvents]) => {
+          const d = new Date(dayEvents[0].starts_at);
+          const isToday = k === todayKey;
+          return (
+            <section key={k} className="grid gap-x-6 gap-y-3 md:grid-cols-[7.5rem_minmax(0,1fr)]">
+              {/* The date block stays in view while that day's sessions scroll. */}
+              <div className="md:sticky md:top-24 md:self-start">
+                <div className="flex items-baseline gap-2 md:block">
+                  <p className={`text-3xl font-semibold leading-none tracking-tight tnum ${isToday ? "text-accent-text" : ""}`}>
+                    {d.getDate()}
+                  </p>
+                  <p className="text-sm font-medium capitalize text-text-muted md:mt-1">
+                    {fmt.date(d, { month: "long" })}
+                  </p>
+                  <p className={`text-xs capitalize md:mt-0.5 ${isToday ? "font-semibold text-accent-text" : "text-text-subtle"}`}>
+                    {fmtDay(dayEvents[0].starts_at)}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+              </div>
+
+              <ul className="panel divide-y divide-border overflow-hidden">
+                {dayEvents.map((e) => {
+                  const badge = e.my_status ? STATUS_BADGE[e.my_status] : null;
+                  const regBadge = e.my_registration ? REGISTRATION_BADGE[e.my_registration] : null;
+                  const signedUp = e.my_registration === "registered" || e.my_registration === "waitlisted";
+                  const full = e.seats_left === 0;
+                  const ends = new Date(new Date(e.starts_at).getTime() + e.duration_min * 60000);
+                  return (
+                    <li key={e.id} className="flex flex-wrap items-start gap-x-5 gap-y-3 p-5 sm:flex-nowrap">
+                      <div className="w-24 shrink-0">
+                        <p className="text-lg font-semibold leading-tight tnum">{fmt.time(e.starts_at)}</p>
+                        <p className="text-xs text-text-subtle tnum">
+                          {fmt.time(ends)} · {e.duration_min}&nbsp;min
+                        </p>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-lg" aria-hidden="true">{e.formation_emoji}</span>
+                          <p className="font-semibold">{e.title}</p>
+                          {e.open_to_all && <span className="badge badge-accent">{t("schedule.openToAll")}</span>}
+                          {badge && <span className={`badge ${badge.cls}`}>{t(badge.key)}</span>}
+                          {regBadge && <span className={`badge ${regBadge.cls}`}>{t(regBadge.key)}</span>}
+                        </div>
+                        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-subtle">
+                          {e.formation_id ? (
+                            <Link href={`/formations/${e.formation_id}`} className="inline-flex items-center gap-1 hover:text-text hover:underline">
+                              <Icon name="formations" size={12} /> {e.formation_title}
+                            </Link>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon name="sessions" size={12} /> {t("schedule.openSession")}
+                            </span>
+                          )}
+                          {e.formation_level && (
+                            <span className="inline-flex items-center gap-1 capitalize">
+                              <span className={`h-1.5 w-1.5 rounded-full ${LEVEL_DOT[e.formation_level] ?? "bg-text-subtle"}`} />
+                              {t(`common.${e.formation_level}`, e.formation_level)}
+                            </span>
+                          )}
+                          {e.trainer_name && (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon name="team" size={12} /> {e.trainer_name}
+                            </span>
+                          )}
+                          {e.location && (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon name="pin" size={12} /> {e.location}
+                            </span>
+                          )}
+                          {e.theme && <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[11px] text-text-muted">{e.theme}</span>}
+                        </p>
+                        {e.description && <p className="mt-2 line-clamp-2 text-sm text-text-muted">{e.description}</p>}
+                        {e.open_to_all && (
+                          <p className="mt-2 text-xs text-text-subtle">
+                            <span className={full ? "font-medium text-warn" : undefined}>{seatsLabel(e)}</span>
+                            {e.registration_deadline && (
+                              <span>
+                                {" · "}
+                                {t(e.registration_open ? "schedule.deadlineOpen" : "schedule.deadlineClosed", {
+                                  date: fmt.date(e.registration_deadline, { day: "numeric", month: "short" }),
+                                })}
+                              </span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {/* One-way calendar export — imports into Outlook, Google
+                            or Apple Calendar. Not a mailbox sync. */}
+                        <a
+                          className="btn-icon h-8 w-8"
+                          href={api.sessionIcsUrl(e.id)}
+                          aria-label={`${t("schedule.addToCalendar")} — ${e.title}`}
+                          title={t("schedule.addToCalendarHint")}
+                        >
+                          <Icon name="calendar" size={15} />
+                        </a>
+                        {e.open_to_all && (
+                          <button
+                            type="button"
+                            className={signedUp ? "btn-ghost btn-sm" : "btn btn-sm"}
+                            disabled={busyId === e.id || (!signedUp && !e.registration_open)}
+                            aria-busy={busyId === e.id}
+                            onClick={() => toggleRegistration(e)}
+                            title={
+                              !signedUp && !e.registration_open
+                                ? t("schedule.registrationsClosedHint")
+                                : full && !signedUp
+                                  ? t("schedule.fullHint")
+                                  : undefined
+                            }
+                          >
+                            {signedUp
+                              ? t("schedule.unregister")
+                              : !e.registration_open
+                                ? t("schedule.registrationsClosed")
+                                : full
+                                  ? t("schedule.joinWaitlist")
+                                  : t("schedule.register")}
+                          </button>
+                        )}
+                        {e.meeting_url && (
+                          <a href={e.meeting_url} target="_blank" rel="noreferrer" className="btn-soft btn-sm">
+                            {t("schedule.join")} <Icon name="external" size={12} />
+                          </a>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

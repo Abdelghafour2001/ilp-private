@@ -150,6 +150,16 @@ export function useFormat() {
           minute: "2-digit",
         }),
       number: (value: number) => value.toLocaleString(tag),
+      /** "5 min ago", "il y a 2 h" — short relative time for feeds. */
+      ago: (value: string | Date) => {
+        const secs = (new Date(value).getTime() - Date.now()) / 1000;
+        const rtf = new Intl.RelativeTimeFormat(tag, { numeric: "auto", style: "short" });
+        const steps: [Intl.RelativeTimeFormatUnit, number][] = [["minute", 60], ["hour", 3600], ["day", 86400], ["week", 604800]];
+        if (Math.abs(secs) < 60) return rtf.format(0, "second");
+        let unit = steps[0];
+        for (const s of steps) if (Math.abs(secs) >= s[1]) unit = s;
+        return rtf.format(Math.round(secs / unit[1]), unit[0]);
+      },
     }),
     [tag],
   );
