@@ -20,6 +20,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { OrgChart as OrgChartData, OrgChartBu, OrgChartTeam, OrgPerson } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import Icon from "@/components/Icon";
 
 /** Role labels arrive as keys so the API stays language-neutral. Anything we
  *  do not recognise is shown as-is rather than swallowed. */
@@ -145,7 +146,7 @@ function PersonLink({ email, children }: { email: string; children: React.ReactN
 function MemberChip({ person }: { person: OrgPerson }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-0.5 pr-2.5 text-xs"
+      className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 py-0.5 pl-0.5 pr-2.5 text-xs"
       title={`${person.name} · ${person.role}${person.job_level ? ` · ${person.job_level}` : ""}`}
     >
       <Avatar label={person.name} size="sm" />
@@ -161,7 +162,7 @@ function TeamNode({ team }: { team: OrgChartTeam }) {
   return (
     <div className="relative">
       <Elbow tone="team" />
-      <div className="rounded-xl border border-border bg-surface p-3 transition-shadow hover:shadow-sm">
+      <div className="group rounded-xl border border-border bg-surface p-4 transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate font-semibold">{team.name}</p>
@@ -170,14 +171,14 @@ function TeamNode({ team }: { team: OrgChartTeam }) {
             </div>
           </div>
           <Link href={`/team?team=${team.id}`} className="btn-ghost btn-sm shrink-0">
-            {t("org.chart.manageTeam")}
+            {t("org.chart.manageTeam")} <Icon name="arrow-right" size={13} />
           </Link>
         </div>
 
         {/* The two people accountable for the team, before its members. */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {team.manager ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 py-0.5 pl-0.5 pr-2.5 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 py-0.5 pl-0.5 pr-2.5 text-xs">
               <Avatar label={team.manager.name} size="sm" tone="accent" />
               <PersonLink email={team.manager.email}>
                 <span className="font-medium">{team.manager.name}</span>
@@ -192,7 +193,7 @@ function TeamNode({ team }: { team: OrgChartTeam }) {
 
         {team.members.length > 0 && (
           <div className="mt-3 border-t border-border pt-2.5">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-subtle">
+            <p className="mb-1.5 text-xs text-text-subtle">
               {t("org.chart.members")}
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -217,11 +218,7 @@ function BuNode({ bu, uncovered }: { bu: OrgChartBu; uncovered?: boolean }) {
   return (
     <div className="relative">
       <Elbow tone="bu" />
-      <div
-        className={`rounded-xl border bg-surface-2 ${
-          uncovered ? "border-warn/40" : "border-border"
-        }`}
-      >
+      <div className={`rounded-xl border ${uncovered ? "border-warn/40" : "border-border"} bg-surface-2/60`}>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -229,17 +226,12 @@ function BuNode({ bu, uncovered }: { bu: OrgChartBu; uncovered?: boolean }) {
           aria-expanded={open}
           className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2.5 text-left disabled:cursor-default"
         >
-          <span
-            aria-hidden
-            className={`text-xs text-text-subtle transition-transform ${open ? "rotate-90" : ""} ${
-              bu.team_count === 0 ? "opacity-0" : ""
-            }`}
-          >
-            ▶
-          </span>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-info">
-            {t("org.chart.bu")}
-          </span>
+          <Icon
+            name="chevron-right"
+            size={14}
+            className={`text-text-subtle transition-transform ${open ? "rotate-90" : ""} ${bu.team_count === 0 ? "opacity-0" : ""}`}
+          />
+          <span className="rounded bg-info/10 px-1.5 py-0.5 text-[11px] font-medium text-info">{t("org.chart.bu")}</span>
           <span className="mr-auto font-semibold">{bu.name}</span>
           {uncovered && (
             <span className="badge bg-warn/15 text-warn">{t("org.chart.noHrbp")}</span>
@@ -252,7 +244,7 @@ function BuNode({ bu, uncovered }: { bu: OrgChartBu; uncovered?: boolean }) {
             the HRBP reports on the unit, the head decides in it — and takes the
             second stage of every training request raised inside. */}
         {bu.head ? (
-          <div className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-iris/30 bg-iris/[0.06] px-2.5 py-1.5">
+          <div className="mx-3 mb-2.5 flex flex-wrap items-center gap-2 pl-6">
             <Avatar label={bu.head.name} size="sm" tone="iris" />
             <PersonLink email={bu.head.email}>
               <span className="text-xs font-semibold">{bu.head.name}</span>
@@ -260,8 +252,11 @@ function BuNode({ bu, uncovered }: { bu: OrgChartBu; uncovered?: boolean }) {
             <span className="text-[11px] text-text-subtle">{t("org.chart.buHead")}</span>
           </div>
         ) : (
+          // A gap worth knowing about, said once in a line rather than a banner:
+          // in an org with several headless BUs the banners drowned the chart.
           bu.headcount > 0 && (
-            <p className="mx-3 mb-2 rounded-lg bg-warn/10 px-2.5 py-1.5 text-[11px] text-warn">
+            <p className="mx-3 mb-2.5 flex items-center gap-1.5 pl-6 text-xs text-warn">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" aria-hidden />
               {t("org.chart.noBuHead")}
             </p>
           )
@@ -277,7 +272,7 @@ function BuNode({ bu, uncovered }: { bu: OrgChartBu; uncovered?: boolean }) {
           </div>
         )}
         {bu.team_count === 0 && (
-          <p className="px-3 pb-2.5 text-xs text-text-subtle">{t("org.chart.buEmpty")}</p>
+          <p className="px-3 pb-2.5 pl-9 text-xs text-text-subtle">{t("org.chart.buEmpty")}</p>
         )}
       </div>
     </div>
@@ -334,7 +329,7 @@ export default function OrgChart({ data }: { data: OrgChartData }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Root — the viewer, at the top of what they can see. */}
-      <div className="rounded-2xl border border-accent/40 bg-accent/[0.07] p-4">
+      <div className="rounded-xl border border-accent/30 bg-accent/5 p-5">
         <div className="flex flex-wrap items-center gap-3">
           <Avatar label={root?.name ?? "HR"} size="lg" tone="accent" />
           <div className="mr-auto min-w-0">
@@ -369,8 +364,8 @@ export default function OrgChart({ data }: { data: OrgChartData }) {
       {/* BUs answering to nobody. Shown detached from the spine, because that
           is exactly their problem — they hang off no HRBP. */}
       {data.unattached_bus.length > 0 && (
-        <div className="rounded-2xl border border-dashed border-warn/50 bg-warn/[0.05] p-3">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-warn">
+        <div className="rounded-xl border border-dashed border-warn/50 p-4">
+          <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-warn">
             {t("org.chart.uncoveredTitle", { count: data.unattached_bus.length })}
           </p>
           <p className="mb-3 max-w-prose text-xs text-text-subtle">

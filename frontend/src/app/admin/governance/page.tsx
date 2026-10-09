@@ -28,6 +28,7 @@ import { getStoredLearner } from "@/lib/learner";
 import { useT } from "@/lib/i18n";
 import AccessDenied from "@/components/AccessDenied";
 import Modal from "@/components/Modal";
+import Icon from "@/components/Icon";
 import ReportsWorkbench from "@/components/ReportsWorkbench";
 
 type Tab = "org" | "people" | "reports";
@@ -112,43 +113,56 @@ export default function GovernancePage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">{t("gov.headingMerged", "Org & reports")}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-text-muted">{t("gov.lede")}</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">{t("gov.headingMerged", "Org & reports")}</h1>
+          <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-text-muted">{t("gov.lede")}</p>
         </div>
-        <button className="btn shrink-0" onClick={() => setInviteOpen(true)}>
-          + {t("gov.invite")}
+        <button type="button" className="btn shrink-0" onClick={() => setInviteOpen(true)}>
+          <Icon name="plus" size={16} /> {t("gov.invite")}
         </button>
       </header>
 
       {error && (
-        <div className="card border-bad/40 text-sm text-bad" onClick={() => setError(null)}>
+        <p role="alert" className="flex items-start justify-between gap-3 rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
           {error}
-        </div>
+          <button type="button" aria-label={t("common.close")} onClick={() => setError(null)} className="shrink-0 opacity-70 hover:opacity-100">
+            <Icon name="x" size={14} />
+          </button>
+        </p>
       )}
       {note && (
-        <div className="card border-good/40 text-sm text-good" onClick={() => setNote(null)}>
-          {note}
-        </div>
+        <p aria-live="polite" className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-text-muted">
+          <span className="inline-flex items-center gap-2">
+            <Icon name="check" size={15} className="text-good" /> {note}
+          </span>
+          <button type="button" aria-label={t("common.close")} onClick={() => setNote(null)} className="shrink-0 text-text-subtle hover:text-text">
+            <Icon name="x" size={14} />
+          </button>
+        </p>
       )}
 
-      <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-0.5 w-fit">
+      <div role="tablist" aria-label={t("gov.headingMerged", "Org & reports")} className="flex gap-6 border-b border-border">
         {([
-          ["org", `🏛 ${t("gov.tab.org")}`],
-          ["people", `👤 ${t("gov.tab.people")}${people.length ? ` (${people.length})` : ""}`],
+          ["org", t("gov.tab.org"), "org"],
+          ["people", t("gov.tab.people"), "team"],
           // The report builder used to be its own screen next to this one, and
           // L&D could not tell them apart: one said "Reports", the other
           // "Governance", and both were about the organisation. Same page now.
-          ["reports", `📊 ${t("gov.tab.reports", "Reports")}`],
-        ] as const).map(([key, label]) => (
+          ["reports", t("gov.tab.reports", "Reports"), "file"],
+        ] as const).map(([key, label, icon]) => (
           <button
             key={key}
+            type="button"
+            role="tab"
             onClick={() => setTab(key)}
-            aria-pressed={tab === key}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              tab === key ? "bg-accent text-accent-fg" : "text-text-subtle hover:text-text"
+            aria-selected={tab === key}
+            className={`-mb-px inline-flex items-center gap-1.5 border-b-2 pb-2.5 text-sm font-medium transition-colors ${
+              tab === key ? "border-accent text-text" : "border-transparent text-text-subtle hover:text-text"
             }`}
           >
-            {label}
+            <Icon name={icon} size={14} /> {label}
+            {key === "people" && people.length > 0 && (
+              <span className="rounded-full bg-surface-3 px-1.5 text-[11px] text-text-muted tnum">{people.length}</span>
+            )}
           </button>
         ))}
       </div>
@@ -215,14 +229,55 @@ function OrgEditor({
 
   return (
     <div className="space-y-4">
+      {/* BU names people carry that the registry has never heard of. Each
+          one is a click to register, rather than a name to retype below. */}
       {overview.orphan_bus.length > 0 && (
-        <div className="card border-warn/40">
-          <p className="text-sm font-semibold text-warn">
-            {t("gov.bu.orphanTitle", { count: overview.orphan_bus.length })}
-          </p>
-          <p className="mt-1 text-sm text-text-muted">
-            {t("gov.bu.orphanBody", { names: overview.orphan_bus.join(", ") })}
-          </p>
+        <div className="rounded-xl border border-warn/30 bg-warn/5 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-warn">
+                {overview.orphan_bus.length === 1
+                  ? t("gov.orphan.titleOne")
+                  : t("gov.orphan.title", { count: overview.orphan_bus.length })}
+              </p>
+              <p className="mt-1 max-w-[70ch] text-sm text-text-muted">{t("gov.orphan.body")}</p>
+            </div>
+            {overview.orphan_bus.length > 1 && (
+              <button
+                type="button"
+                className="btn-soft btn-sm shrink-0"
+                onClick={() =>
+                  run(
+                    () =>
+                      overview.orphan_bus.reduce<Promise<unknown>>(
+                        (chain, name) => chain.then(() => api.govCreateBu({ learner_id: learnerId, name })),
+                        Promise.resolve(),
+                      ),
+                    t("gov.orphan.allDone", { count: overview.orphan_bus.length }),
+                  )
+                }
+              >
+                <Icon name="plus" size={14} /> {t("gov.orphan.registerAll")}
+              </button>
+            )}
+          </div>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {overview.orphan_bus.map((name) => (
+              <li key={name} className="inline-flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-3 pr-1 text-sm">
+                {name}
+                <button
+                  type="button"
+                  className="rounded-full px-2 py-0.5 text-xs font-medium text-accent-text hover:bg-accent/10"
+                  aria-label={t("gov.orphan.registerOne", { name })}
+                  onClick={() =>
+                    run(() => api.govCreateBu({ learner_id: learnerId, name }), t("gov.bu.created", { name }))
+                  }
+                >
+                  {t("gov.orphan.register")}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -230,7 +285,7 @@ function OrgEditor({
           nowhere to be managed from, which is how three empty demo teams
           survived every clean-up. */}
       {overview.unattached_teams.length > 0 && (
-        <div className="card border-warn/40 space-y-2">
+        <div className="space-y-3 rounded-xl border border-warn/30 bg-warn/5 p-4">
           <div>
             <p className="text-sm font-semibold text-warn">
               {t("gov.teams.unattachedTitle", { count: overview.unattached_teams.length })}
@@ -248,8 +303,9 @@ function OrgEditor({
                   {t("gov.bu.people", { count: team.member_count })}
                 </span>
                 <button
-                  className="text-text-subtle hover:text-bad"
-                  title={t("gov.teams.delete")}
+                  type="button"
+                  className="grid h-5 w-5 place-items-center rounded-full text-text-subtle hover:bg-bad/10 hover:text-bad"
+                  aria-label={`${t("gov.teams.delete")} — ${team.name}`}
                   onClick={() => {
                     if (team.member_count > 0) {
                       // Deleting a staffed team loses its manager and its
@@ -263,7 +319,7 @@ function OrgEditor({
                     );
                   }}
                 >
-                  ✕
+                  <Icon name="x" size={11} />
                 </button>
               </span>
             ))}
@@ -271,14 +327,15 @@ function OrgEditor({
         </div>
       )}
 
-      <div className="card flex flex-wrap items-end gap-3">
+      <div className="panel flex flex-wrap items-end gap-3 p-4">
         {creating ? (
           <>
             <div className="min-w-[220px] flex-1">
-              <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+              <label htmlFor="gov-new-bu" className="text-sm font-medium">
                 {t("gov.bu.name")}
               </label>
               <input
+                id="gov-new-bu"
                 autoFocus
                 className="input mt-1 w-full"
                 value={newBu}
@@ -309,8 +366,8 @@ function OrgEditor({
             </button>
           </>
         ) : (
-          <button className="btn-soft" onClick={() => setCreating(true)}>
-            + {t("gov.bu.new")}
+          <button type="button" className="btn-soft" onClick={() => setCreating(true)}>
+            <Icon name="plus" size={15} /> {t("gov.bu.new")}
           </button>
         )}
       </div>
@@ -457,7 +514,7 @@ function BuCard({
           now, which is why the same practice could be spelled three ways. */}
       <div className="rounded-lg border border-border bg-surface-2 p-2.5">
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-text-subtle">
+          <p className="text-xs font-medium text-text-subtle">
             {t("gov.practices.heading")}
           </p>
           <button
@@ -517,7 +574,7 @@ function BuCard({
       </div>
 
       <div className="rounded-lg border border-border bg-surface-2 p-2.5">
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-subtle">
+        <p className="mb-1.5 text-xs font-medium text-text-subtle">
           {t("gov.teams.heading")}
         </p>
         <div className="flex flex-col gap-1.5">
@@ -612,7 +669,7 @@ function PersonPicker({
   const t = useT();
   return (
     <div>
-      <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+      <label className="text-xs font-medium text-text-muted">
         {t(label)}
       </label>
       <p className="text-[11px] text-text-subtle">{t(hint)}</p>
@@ -654,7 +711,7 @@ function MultiPersonPicker({
   );
   return (
     <div>
-      <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+      <label className="text-xs font-medium text-text-muted">
         {t(label)}
       </label>
       <p className="text-[11px] text-text-subtle">{t(hint)}</p>
@@ -716,7 +773,7 @@ function PeopleEditor({
     <div className="space-y-3">
       <div className="card flex flex-wrap items-end gap-3">
         <div className="min-w-[200px] flex-1">
-          <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+          <label className="text-xs font-medium text-text-muted">
             {t("common.search")}
           </label>
           <input
@@ -906,7 +963,7 @@ function PersonRow({
               onChange={(v) => setDraft({ ...draft, title: v })}
             />
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+              <label className="text-xs font-medium text-text-muted">
                 {t("common.role")}
               </label>
               <p className="text-[11px] text-text-subtle">{t("gov.people.roleHint")}</p>
@@ -926,7 +983,7 @@ function PersonRow({
             <Field label={t("common.site")} value={draft.location} onChange={(v) => setDraft({ ...draft, location: v })} />
             <Field label={t("common.matricule")} value={draft.matricule} onChange={(v) => setDraft({ ...draft, matricule: v })} />
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+              <label className="text-xs font-medium text-text-muted">
                 BU
               </label>
               <select
@@ -943,7 +1000,7 @@ function PersonRow({
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+              <label className="text-xs font-medium text-text-muted">
                 {t("common.team")}
               </label>
               <select
@@ -968,7 +1025,7 @@ function PersonRow({
               a colleague in was a curl command. There is no self-service
               reset, which makes this the whole of account recovery. */}
           <div className="space-y-2 rounded-xl border border-border bg-surface-2/40 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+            <p className="text-xs font-medium text-text-muted">
               {t("gov.people.password", "Sign-in password")}
             </p>
             {person.email ? (
@@ -1048,7 +1105,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+      <label className="text-xs font-medium text-text-muted">
         {label}
       </label>
       {hint && <p className="text-[11px] text-text-subtle">{hint}</p>}
@@ -1186,7 +1243,7 @@ function InviteDialog({
       {step === 1 && (
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">{t("common.role")}</label>
+            <label className="text-xs font-medium text-text-muted">{t("common.role")}</label>
             <select
               className="input mt-1 w-full text-sm"
               value={form.role}
@@ -1200,7 +1257,7 @@ function InviteDialog({
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">BU</label>
+            <label className="text-xs font-medium text-text-muted">BU</label>
             <select
               className="input mt-1 w-full text-sm"
               value={form.bu}
@@ -1215,7 +1272,7 @@ function InviteDialog({
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-text-subtle">{t("common.team")}</label>
+            <label className="text-xs font-medium text-text-muted">{t("common.team")}</label>
             <select
               className="input mt-1 w-full text-sm"
               value={form.team_id}
@@ -1237,7 +1294,7 @@ function InviteDialog({
 
       {step === 1 && (
         <div className="rounded-lg border border-border bg-surface-2 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-text-subtle">
+          <p className="text-xs font-medium text-text-subtle">
             {t("gov.invite.pathways")}
           </p>
           {preview.length > 0 ? (
@@ -1258,7 +1315,7 @@ function InviteDialog({
 
       {step === 1 && (
         <div className="space-y-1.5 rounded-lg border border-border bg-surface-2/40 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-text-subtle">
+          <p className="text-xs font-medium text-text-muted">
             {t("gov.invite.password", "Password (optional)")}
           </p>
           <input

@@ -271,6 +271,26 @@ Players open on the first lesson not yet done.
 - An action that needs a choice opens one Modal with the choice inside it. It
   never depends on a control somewhere else on the page.
 
+### Headline figures
+Use `components/StatStrip.tsx`: one panel of hairline-divided cells, not a grid
+of separate cards. Group related figures under one short title ("People",
+"Learning") instead of one strip of twelve. Labels are sentence case with an
+optional icon, never an emoji. Values are plain `text`. Only figures someone
+must act on take a tone (`bad` for overdue, `warn` for struggling), and only
+when they are non-zero.
+
+### Section tabs
+Underline tabs: a `role="tablist"` row with `border-b border-border`. Each tab
+is a `-mb-px border-b-2` button with an icon and `aria-selected`. The active
+tab gets `border-accent text-text`. Pills (`Segmented`) are for choosing a
+value (filter, period, source), not for switching between page sections.
+
+### Settings
+Two columns from `md` up: the section title and one line of context on the
+left (`15rem`), the controls in a `panel` on the right. Choices save on change
+and confirm in the header through `aria-live`. Use `Segmented` for short sets
+of options (language, theme, goal).
+
 ### Modal
 Use `components/Modal.tsx`, never a hand-rolled overlay. It portals to `<body>`,
 moves focus into the dialog and back to the opener on close, and closes on Esc

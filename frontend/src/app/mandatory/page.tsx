@@ -24,9 +24,11 @@ import Link from "next/link";
 import AccessDenied, { isForbidden } from "@/components/AccessDenied";
 import AssignWizard from "@/components/AssignWizard";
 import Pager, { pageOf } from "@/components/Pager";
+import Icon, { type IconName } from "@/components/Icon";
+import StatStrip from "@/components/StatStrip";
 import { api, type TrackingItem, type TrackingResponse } from "@/lib/api";
 import { getStoredLearner } from "@/lib/learner";
-import { useI18n } from "@/lib/i18n";
+import { useFormat, useI18n } from "@/lib/i18n";
 
 const TONE: Record<string, string> = {
   completed: "bg-good/15 text-good",
@@ -34,14 +36,15 @@ const TONE: Record<string, string> = {
   not_started: "bg-edge text-text-subtle",
 };
 
-const KIND: Record<string, string> = {
-  course: "📘",
-  formation: "🎓",
-  pathway: "🧭",
+const KIND: Record<string, IconName> = {
+  course: "courses",
+  formation: "formations",
+  pathway: "route",
 };
 
 export default function TrackingPage() {
   const { t, locale } = useI18n();
+  const fmt = useFormat();
   const [data, setData] = useState<TrackingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -104,25 +107,25 @@ export default function TrackingPage() {
   const k = data.totals;
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">{t("track.pageTitle")}</h1>
-          <p className="text-sm text-text-muted">{t("track.pageLede", { scope: data.scope })}</p>
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">{t("track.pageTitle")}</h1>
+          <p className="max-w-[65ch] pt-1 text-sm leading-relaxed text-text-muted">{t("track.pageLede", { scope: data.scope })}</p>
           {/* Provider figures are as of the last sync, never live. A board that
               does not say so invites somebody to read a four-hour-old number as
               this minute's. */}
           {data.provider_synced_at && (
             <p className="text-xs text-text-subtle">
-              🎓 {t("track.asOf", { date: new Date(data.provider_synced_at).toLocaleString(locale === "fr" ? "fr-FR" : "en-GB") }, "Coursera progress as of {date}")}
+              {t("track.asOf", { date: new Date(data.provider_synced_at).toLocaleString(locale === "fr" ? "fr-FR" : "en-GB") }, "Coursera progress as of {date}")}
             </p>
           )}
         </div>
         {/* Tracking and assigning are the same job seen from two ends, so the
             way to hand work out lives on the screen that shows what came of
             it. */}
-        <button className="btn shrink-0" onClick={() => setAssigning(true)}>
-          📌 {t("wizard.open", "Assign learning")}
+        <button type="button" className="btn shrink-0" onClick={() => setAssigning(true)}>
+          <Icon name="plus" size={16} /> {t("wizard.open", "Assign learning")}
         </button>
       </header>
 
@@ -142,42 +145,56 @@ export default function TrackingPage() {
         />
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
-        {[
-          [t("track.assignments"), String(k.assignments), t("track.forPeople", { n: k.people })],
-          [t("history.completed"), String(k.completed),
-           k.accepted > 0 ? t("track.ofWhichAccepted", { n: k.accepted }, "{n} accepted by L&D") : ""],
-          [t("track.mandatoryCount"), String(k.mandatory), ""],
-          [t("track.overdueCount"), String(k.overdue), ""],
-          [t("track.neverStarted"), String(k.never_started), ""],
+      {/* Late and struggling are the two numbers somebody has to act on, so
+          they are the only ones that take a colour, and only when non-zero. */}
+      <StatStrip
+        title={t("track.pageTitle")}
+        showTitle={false}
+        stats={[
+          { label: t("track.assignments"), value: k.assignments, hint: t("track.forPeople", { n: k.people }) },
+          {
+            label: t("history.completed"),
+            value: k.completed,
+            hint: k.accepted > 0 ? t("track.ofWhichAccepted", { n: k.accepted }, "{n} accepted by L&D") : undefined,
+          },
+          { label: t("track.mandatoryCount"), value: k.mandatory },
+          { label: t("track.overdueCount"), value: k.overdue, tone: k.overdue > 0 ? "bad" : undefined },
+          { label: t("track.neverStarted"), value: k.never_started },
           // Assigned and never signed up — a different problem from "started
           // and stalled", and the only one a reminder can actually fix.
-          [t("track.notEnrolled", "Never enrolled"), String(k.not_enrolled), t("track.notEnrolledHint", "on Coursera")],
+          { label: t("track.notEnrolled", "Never enrolled"), value: k.not_enrolled, hint: t("track.notEnrolledHint", "on Coursera") },
           // The one that answers "who needs help" rather than "who is late".
-          [t("track.struggling"), String(k.struggling), t("track.strugglingHint")],
-        ].map(([label, value, hint]) => (
-          <div key={label} className="card py-3">
-            <p className="text-xs uppercase tracking-wide text-text-subtle">{label}</p>
-            <p className="mt-0.5 text-2xl font-semibold tnum">{value}</p>
-            {hint && <p className="text-xs text-text-subtle">{hint}</p>}
-          </div>
-        ))}
-      </div>
+          { label: t("track.struggling"), value: k.struggling, hint: t("track.strugglingHint"), tone: k.struggling > 0 ? "warn" : undefined },
+        ]}
+      />
 
+      {k.assignments === 0 ? (
+        <div className="rounded-xl border border-dashed border-border-strong px-6 py-14 text-center">
+          <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-accent/10 text-accent-text">
+            <Icon name="target" size={20} />
+          </span>
+          <p className="mt-4 font-medium">{t("track.emptyTitle")}</p>
+          <p className="mx-auto mt-1 max-w-[48ch] text-sm text-text-muted">{t("track.emptyBody")}</p>
+          <button type="button" className="btn mt-5" onClick={() => setAssigning(true)}>
+            <Icon name="plus" size={16} /> {t("wizard.open", "Assign learning")}
+          </button>
+        </div>
+      ) : (
+      <>
       <div className="flex flex-wrap items-center gap-2">
-        <select className="input max-w-[11rem]" value={filters.kind} onChange={(e) => narrow({ kind: e.target.value })}>
+        <select className="input max-w-[11rem]" aria-label={t("track.allKinds")} value={filters.kind} onChange={(e) => narrow({ kind: e.target.value })}>
           <option value="">{t("track.allKinds")}</option>
-          <option value="course">📘 {t("nav.courses")}</option>
-          <option value="formation">🎓 {t("nav.formations")}</option>
-          <option value="pathway">🧭 {t("nav.pathways")}</option>
+          <option value="course">{t("nav.courses")}</option>
+          <option value="formation">{t("nav.formations")}</option>
+          <option value="pathway">{t("nav.pathways")}</option>
         </select>
-        <select className="input max-w-[12rem]" value={filters.status} onChange={(e) => narrow({ status: e.target.value })}>
+        <select className="input max-w-[12rem]" aria-label={t("cour.statusAll")} value={filters.status} onChange={(e) => narrow({ status: e.target.value })}>
           <option value="">{t("cour.statusAll")}</option>
           <option value="not_started">{t("track.not_startedLabel")}</option>
           <option value="in_progress">{t("track.in_progressLabel")}</option>
           <option value="completed">{t("track.completedLabel")}</option>
         </select>
-        <select className="input max-w-[12rem]" value={filters.only} onChange={(e) => narrow({ only: e.target.value })}>
+        <select className="input max-w-[12rem]" aria-label={t("track.everything")} value={filters.only} onChange={(e) => narrow({ only: e.target.value })}>
           <option value="">{t("track.everything")}</option>
           <option value="mandatory">{t("assign.mandatory")}</option>
           <option value="overdue">{t("track.overdueCount")}</option>
@@ -189,10 +206,10 @@ export default function TrackingPage() {
         <span className="ml-auto text-xs text-text-subtle">{t("track.rows", { n: rows.length })}</span>
       </div>
 
-      <div className="card p-0">
+      <div className="panel overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="border-b border-edge text-xs uppercase tracking-wide text-text-subtle">
+            <thead className="border-b border-border text-xs text-text-subtle">
               <tr>
                 <th className="px-4 py-3 font-medium">{t("track.what")}</th>
                 <th className="px-4 py-3 font-medium">{t("org.col.collaborator")}</th>
@@ -202,15 +219,15 @@ export default function TrackingPage() {
                 <th className="px-4 py-3 text-right font-medium">{t("track.attempts")}</th>
                 <th className="px-4 py-3 text-right font-medium">{t("track.due")}</th>
                 <th className="px-4 py-3 font-medium">{t("track.assignedBy")}</th>
-                <th className="px-4 py-3 font-medium"> </th>
+                <th className="px-4 py-3 font-medium"><span className="sr-only">{t("track.actions")}</span></th>
               </tr>
             </thead>
             <tbody>
               {pageOf(rows, page).map((r: TrackingItem) => (
-                <tr key={`${r.kind}-${r.entity_id}-${r.learner_id}`} className="border-t border-edge">
+                <tr key={`${r.kind}-${r.entity_id}-${r.learner_id}`} className="border-t border-border transition-colors hover:bg-surface-2/60">
                   <td className="px-4 py-2.5">
-                    <Link href={r.link} className="font-medium hover:text-accent">
-                      {KIND[r.kind]} {r.title}
+                    <Link href={r.link} className="inline-flex items-center gap-1.5 font-medium hover:text-accent-text">
+                      <Icon name={KIND[r.kind] ?? "file"} size={14} className="shrink-0 text-text-subtle" /> {r.title}
                     </Link>
                     {r.mandatory && (
                       <span className="badge ml-2 bg-warn/15 text-warn">{t("assign.mandatory")}</span>
@@ -229,10 +246,10 @@ export default function TrackingPage() {
                   <td className="px-4 py-2.5 text-xs text-text-muted">{r.bu || "—"}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
+                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-3" role="progressbar" aria-valuenow={r.percent} aria-valuemin={0} aria-valuemax={100} aria-label={r.title}>
                         <div
-                          className={`h-full rounded-full ${r.status === "completed" ? "bg-good" : "bg-accent"}`}
-                          style={{ width: `${Math.max(2, r.percent)}%` }}
+                          className={`h-full origin-left rounded-full ${r.status === "completed" ? "bg-good" : "bg-accent"}`}
+                          style={{ transform: `scaleX(${Math.max(0.02, r.percent / 100)})` }}
                         />
                       </div>
                       <span className={`badge ${TONE[r.status]}`}>{t(`track.${r.status}Label`)}</span>
@@ -247,12 +264,12 @@ export default function TrackingPage() {
                     ) : (
                       <span className={r.failed_attempts >= 2 ? "text-bad" : ""}>
                         {r.attempts}
-                        {r.failed_attempts > 0 && ` (${r.failed_attempts} ✗)`}
+                        {r.failed_attempts > 0 && ` · ${t("track.failedN", { n: r.failed_attempts })}`}
                       </span>
                     )}
                   </td>
                   <td className={`px-4 py-2.5 text-right tnum ${r.overdue ? "text-bad" : "text-text-subtle"}`}>
-                    {r.due_date ?? "—"}
+                    {r.due_date ? fmt.date(r.due_date, { day: "numeric", month: "short", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-text-subtle">
                     {r.assigned_by || "—"}
@@ -265,7 +282,7 @@ export default function TrackingPage() {
                         title={`${r.accepted_by} · ${r.accepted_on}${r.accepted_note ? ` · ${r.accepted_note}` : ""} — ${t("track.undoAccept", "click to undo")}`}
                         onClick={() => undoAccept(r)}
                       >
-                        ✔ {t("track.acceptedBy", { who: r.accepted_by }, "Accepted by {who}")}
+                        <Icon name="check" size={11} /> {t("track.acceptedBy", { who: r.accepted_by }, "Accepted by {who}")}
                       </button>
                     ) : (
                       r.status !== "completed" && (
@@ -291,6 +308,8 @@ export default function TrackingPage() {
           <Pager page={page} total={rows.length} onPage={setPage} />
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

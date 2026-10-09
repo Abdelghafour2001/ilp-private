@@ -19,7 +19,7 @@ type Period = "" | "30" | "7";
 const PLACE = [
   { ring: "ring-warn/60", text: "text-warn", label: "lb.first" },
   { ring: "ring-text-subtle/50", text: "text-text-muted", label: "lb.second" },
-  { ring: "ring-[#c08457]/60", text: "text-[#a8693e] dark:text-[#d79a6b]", label: "lb.third" },
+  { ring: "ring-iris/50", text: "text-iris", label: "lb.third" },
 ];
 
 export default function Leaderboard() {
@@ -157,7 +157,7 @@ export default function Leaderboard() {
                 } ${isMe(e) ? "border-accent" : ""}`}
               >
                 <span className="sr-only">{t(p.label)}</span>
-                <span className={`text-xs font-semibold uppercase tracking-wider ${p.text}`} aria-hidden="true">
+                <span className={`text-sm font-semibold tnum ${p.text}`} aria-hidden="true">
                   {pos + 1}
                 </span>
                 <span

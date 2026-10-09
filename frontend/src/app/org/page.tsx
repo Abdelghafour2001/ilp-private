@@ -19,6 +19,9 @@ import HrPerimeterPanel from "@/components/HrPerimeterPanel";
 import CourseraPanel from "@/components/CourseraPanel";
 import OrgChart from "@/components/OrgChart";
 import AccessDenied, { isForbidden } from "@/components/AccessDenied";
+import Icon, { type IconName } from "@/components/Icon";
+import StatStrip from "@/components/StatStrip";
+import { Segmented } from "@/components/form/Field";
 
 /** Which platform's numbers this screen reports. Coursera used to be its own
  *  page, which meant nobody could see the two side by side. */
@@ -360,115 +363,109 @@ export default function OrgPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{t("org.title")}</h1>
-          <p className="mt-1 text-sm text-text-muted">{t("org.subtitle")}</p>
-          {/* One analytics screen, three sources. Reading UpSkill and Coursera on
-              two separate pages made them impossible to compare. */}
-          <div className="mt-3 flex items-center gap-1 rounded-lg border border-border p-0.5 w-fit">
-            {(
-              [
-                ["app", `📊 ${t("org.view.app")}`, t("org.view.appHint")],
-                ["coursera", `🎓 ${t("org.view.coursera")}`, t("org.view.courseraHint")],
-                ["both", `🔀 ${t("org.view.both")}`, t("org.view.bothHint")],
-              ] as const
-            ).map(([value, label, hint]) => (
-              <button
-                key={value}
-                onClick={() => setSource(value)}
-                title={hint}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  source === value
-                    ? "bg-accent/15 text-accent-text"
-                    : "text-text-subtle hover:text-text"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">{t("org.title")}</h1>
+          <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-text-muted">{t("org.subtitle")}</p>
         </div>
         {kpi && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* An HRBP is scoped to their BU server-side; say so, so nobody
                 reads a partial view as the whole company. */}
             <span
-              className={`rounded-full border px-3 py-1 text-xs ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
                 kpi.scope.org_wide
                   ? "border-border bg-surface text-text-muted"
                   : "border-accent/40 bg-accent/10 text-accent-text"
               }`}
-              title={
-                kpi.scope.org_wide
-                  ? t("org.scope.orgWideHint")
-                  : t("org.scope.buHint")
-              }
+              title={kpi.scope.org_wide ? t("org.scope.orgWideHint") : t("org.scope.buHint")}
             >
-              {kpi.scope.org_wide ? "🌍 " : "🔒 "}
+              <Icon name={kpi.scope.org_wide ? "org" : "lock"} size={12} />
               {kpi.scope.org_wide ? t("org.scope.orgWide") : kpi.scope.label}
             </span>
-            <a
-              className="btn-ghost btn-sm"
-              href={api.hrExportUrl("xlsx", source, me?.id)}
-              title={t("common.export") + " — Excel"}
-            >
-              ⬇ Excel
+            <a className="btn-ghost btn-sm" href={api.hrExportUrl("xlsx", source, me?.id)} aria-label={`${t("common.export")} — Excel`}>
+              <Icon name="file" size={13} /> Excel
             </a>
-            <a
-              className="btn-ghost btn-sm"
-              href={api.hrExportUrl("pdf", source, me?.id)}
-              title={t("common.export") + " — PDF"}
-            >
-              ⬇ PDF
+            <a className="btn-ghost btn-sm" href={api.hrExportUrl("pdf", source, me?.id)} aria-label={`${t("common.export")} — PDF`}>
+              <Icon name="file" size={13} /> PDF
             </a>
           </div>
         )}
+      </header>
+
+      {/* One analytics screen, three sources. Reading UpSkill and Coursera on
+          two separate pages made them impossible to compare. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented
+          label={t("org.view.label")}
+          value={source}
+          onChange={setSource}
+          options={[
+            { value: "app" as const, label: t("org.view.app") },
+            { value: "coursera" as const, label: t("org.view.coursera") },
+            { value: "both" as const, label: t("org.view.both") },
+          ]}
+        />
+        <p className="text-xs text-text-subtle">
+          {source === "app" ? t("org.view.appHint") : source === "coursera" ? t("org.view.courseraHint") : t("org.view.bothHint")}
+        </p>
       </div>
 
       {error && (
-        <div className="card text-center text-sm text-text-subtle">
-          {t("org.denied")}{" "}
-          {me ? t("org.denied.askAdmin") : t("common.signInFirst")}
+        <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+          {t("org.denied")} {me ? t("org.denied.askAdmin") : t("common.signInFirst")}
+        </p>
+      )}
+
+      {allowed && !teams && !error && (
+        <div className="space-y-4" aria-busy="true">
+          <div className="h-24 skeleton rounded-xl" />
+          <div className="h-24 skeleton rounded-xl" />
+          <div className="h-80 skeleton rounded-xl" />
         </div>
       )}
 
       {allowed && teams && (
         <>
-          {/* org totals */}
           {totals && source !== "coursera" && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {[
+            <StatStrip
+              title={t("org.group.people")}
+              stats={[
                 { label: t("org.teams"), value: totals.teams },
                 { label: t("org.managers"), value: totals.managers },
                 { label: t("org.learnersInTeams"), value: totals.members },
-                { label: t("org.activeThisWeek"), value: `${totals.active}/${totals.members}` },
+                {
+                  label: t("org.activeThisWeek"),
+                  value: (
+                    <>
+                      {totals.active}
+                      <span className="text-base font-medium text-text-subtle">/{totals.members}</span>
+                    </>
+                  ),
+                },
                 { label: t("org.orgXp"), value: fmt.number(totals.xp) },
-              ].map((s) => (
-                <div key={s.label} className="card">
-                  <p className="text-xs uppercase tracking-wide text-text-subtle">{s.label}</p>
-                  <p className="mt-1 text-2xl font-semibold text-accent">{s.value}</p>
-                </div>
-              ))}
-            </div>
+              ]}
+            />
           )}
 
-          {/* engagement KPIs */}
           {kpi && source !== "coursera" && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {[
+            <StatStrip
+              title={t("org.group.learning")}
+              stats={[
                 // In "both" the headline is the blend; on its own AIDA reports
                 // only what happened here, because `learning_hours` already
                 // carries the provider's hours and would double the story.
                 source === "both"
                   ? {
-                      label: `⏱ ${t("org.kpi.totalHours")}`,
+                      icon: "clock" as IconName,
+                      label: t("org.kpi.totalHours"),
                       value: kpi.totals.learning_hours,
                       hint: `${kpi.totals.app_hours} h ${t("org.view.app")} · ${kpi.totals.external_hours} h ${t("org.view.coursera")}`,
                     }
                   : {
-                      label: `⏱ ${t("org.kpi.appHours")}`,
+                      icon: "clock" as IconName,
+                      label: t("org.kpi.appHours"),
                       value: kpi.totals.app_hours,
                       // No external figure here: this tile is the AIDA source,
                       // and quoting Coursera hours under it is what the switch
@@ -478,7 +475,8 @@ export default function OrgPage() {
                 ...(source === "both"
                   ? [
                       {
-                        label: `🎓 ${t("org.kpi.courseraEnrollments")}`,
+                        icon: "courses" as IconName,
+                        label: t("org.kpi.courseraEnrollments"),
                         value: kpi.totals.external_courses,
                         hint: `${pct(kpi.totals.external_completion_rate)} · ${t("org.kpi.linkedPeople", {
                           linked: kpi.totals.external_people,
@@ -488,7 +486,8 @@ export default function OrgPage() {
                     ]
                   : []),
                 {
-                  label: `📆 ${t("org.kpi.manDays")}`,
+                  icon: "calendar" as IconName,
+                  label: t("org.kpi.manDays"),
                   // Follows the hours tile above it. Man-days off the blended
                   // total under an AIDA heading is the same mistake one line down.
                   value:
@@ -496,9 +495,10 @@ export default function OrgPage() {
                       ? kpi.totals.man_days
                       : Math.round((10 * kpi.totals.app_hours) / kpi.hours_per_man_day) / 10,
                 },
-                { label: `✅ ${t("org.kpi.completion")}`, value: `${kpi.totals.completion_rate}%` },
+                { icon: "check" as IconName, label: t("org.kpi.completion"), value: `${kpi.totals.completion_rate}%` },
                 {
-                  label: `🙋 ${t("org.kpi.attendance")}`,
+                  icon: "team" as IconName,
+                  label: t("org.kpi.attendance"),
                   value: pct(kpi.totals.attendance_rate),
                   hint: t("org.kpi.attendanceHint", {
                     present: kpi.totals.sessions_attended,
@@ -506,30 +506,21 @@ export default function OrgPage() {
                   }),
                 },
                 {
-                  label: `🏗 ${t("org.kpi.sourceSplit")}`,
+                  icon: "route" as IconName,
+                  label: t("org.kpi.sourceSplit"),
                   value: `${kpi.totals.internal_programs} · ${kpi.totals.external_programs}`,
                 },
-                { label: `⭐ ${t("org.kpi.feedback")}`, value: `${kpi.totals.feedback_rate}%` },
-                { label: `🏅 ${t("org.kpi.certificates")}`, value: kpi.totals.certificates },
-              ].map((s) => (
-                <div key={s.label} className="card">
-                  <p className="text-xs uppercase tracking-wide text-text-subtle">{s.label}</p>
-                  <p className="mt-1 text-2xl font-semibold text-accent">{s.value}</p>
-                  {"hint" in s && s.hint && (
-                    <p className="mt-0.5 text-[11px] text-text-subtle">{s.hint}</p>
-                  )}
-                </div>
-              ))}
-            </div>
+                { icon: "sparkles" as IconName, label: t("org.kpi.feedback"), value: `${kpi.totals.feedback_rate}%` },
+                { icon: "award" as IconName, label: t("org.kpi.certificates"), value: kpi.totals.certificates },
+              ]}
+            />
           )}
 
           {/* Provider accounts we could not tie to a learner. Surfaced because
               a silent drop and a genuine zero look identical in a report. */}
           {kpi && kpi.totals.external_unmatched > 0 && (
-            <div className="card border-warn/40 text-sm">
-              <p className="font-medium text-warn">
-                ⚠ {t("org.unmatched.title", { count: kpi.totals.external_unmatched })}
-              </p>
+            <div className="rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-sm">
+              <p className="font-medium text-warn">{t("org.unmatched.title", { count: kpi.totals.external_unmatched })}</p>
               <p className="mt-1 text-xs text-text-muted">{t("org.unmatched.body")}</p>
             </div>
           )}
@@ -541,28 +532,31 @@ export default function OrgPage() {
 
           {/* section tabs */}
           {shown && (
-          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 w-fit">
-            {[
-              { k: "teams" as const, label: `🌳 ${t("org.tab.teams")}` },
-              { k: "content" as const, label: `📚 ${t("org.tab.content")}` },
-              { k: "people" as const, label: `👤 ${t("org.tab.people")}` },
-              { k: "heatmap" as const, label: `🔥 ${t("org.tab.heatmap")}` },
-              // Only the HR lead has anything to do here.
-              ...(me?.role === "hr_lead" || me?.role === "admin"
-                ? [{ k: "perimeters" as const, label: `🧭 ${t("org.tab.perimeters")}` }]
-                : []),
-            ].map((t) => (
-              <button
-                key={t.k}
-                onClick={() => setTab(t.k)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  tab === t.k ? "bg-accent/15 text-accent-text" : "text-text-subtle hover:text-text"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+            <div role="tablist" aria-label={t("org.title")} className="flex gap-6 overflow-x-auto border-b border-border">
+              {[
+                { k: "teams" as const, label: t("org.tab.teams"), icon: "org" as IconName },
+                { k: "content" as const, label: t("org.tab.content"), icon: "courses" as IconName },
+                { k: "people" as const, label: t("org.tab.people"), icon: "team" as IconName },
+                { k: "heatmap" as const, label: t("org.tab.heatmap"), icon: "target" as IconName },
+                // Only the HR lead has anything to do here.
+                ...(me?.role === "hr_lead" || me?.role === "admin"
+                  ? [{ k: "perimeters" as const, label: t("org.tab.perimeters"), icon: "lock" as IconName }]
+                  : []),
+              ].map((x) => (
+                <button
+                  key={x.k}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === x.k}
+                  onClick={() => setTab(x.k)}
+                  className={`-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 pb-2.5 text-sm font-medium transition-colors ${
+                    tab === x.k ? "border-accent text-text" : "border-transparent text-text-subtle hover:text-text"
+                  }`}
+                >
+                  <Icon name={x.icon} size={14} /> {x.label}
+                </button>
+              ))}
+            </div>
           )}
 
           {/* content analytics */}
@@ -572,6 +566,7 @@ export default function OrgPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <select
                     className="input h-8 py-0 text-xs"
+                    aria-label={t("org.filter.allModes")}
                     value={contentFilters.format}
                     onChange={(e) => setContentFilters({ ...contentFilters, format: e.target.value })}
                   >
@@ -582,6 +577,7 @@ export default function OrgPage() {
                   </select>
                   <select
                     className="input h-8 py-0 text-xs"
+                    aria-label={t("org.filter.allSources")}
                     value={contentFilters.source}
                     onChange={(e) => setContentFilters({ ...contentFilters, source: e.target.value })}
                   >
@@ -598,12 +594,12 @@ export default function OrgPage() {
                   disabled={!filteredContent.length}
                   className="btn-ghost btn-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  ⬇ {t("common.export")}
+                  <Icon name="file" size={13} /> {t("common.export")}
                 </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="border-b border-edge text-xs uppercase tracking-wide text-text-subtle">
+                  <thead className="border-b border-border text-xs text-text-subtle">
                     <tr>
                       <th className="px-4 py-3 font-medium">{t("org.col.content")}</th>
                       <th className="px-4 py-3 font-medium">{t("org.col.owner")}</th>
@@ -698,6 +694,7 @@ export default function OrgPage() {
                 ] as const).map(([key, label]) => (
                   <select
                     key={key}
+                    aria-label={label}
                     value={filters[key]}
                     onChange={(e) => { setPage(0); setFilters((f) => ({ ...f, [key]: e.target.value })); }}
                     className="input max-w-[170px] py-1 text-xs"
@@ -730,12 +727,12 @@ export default function OrgPage() {
                   disabled={!filteredCollaborators.length}
                   className="btn-ghost btn-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  ⬇ {t("common.export")}
+                  <Icon name="file" size={13} /> {t("common.export")}
                 </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1200px] text-left text-sm">
-                  <thead className="border-b border-edge text-xs uppercase tracking-wide text-text-subtle">
+                  <thead className="border-b border-border text-xs text-text-subtle">
                     <tr>
                       {peopleCols.map((c) => (
                         <th
@@ -777,6 +774,7 @@ export default function OrgPage() {
                   <button
                     className="btn-ghost btn-sm disabled:opacity-40"
                     disabled={page === 0}
+                    aria-label={t("org.prevPage")}
                     onClick={() => setPage((n) => Math.max(0, n - 1))}
                   >
                     ←
@@ -788,6 +786,7 @@ export default function OrgPage() {
                   <button
                     className="btn-ghost btn-sm disabled:opacity-40"
                     disabled={page + 1 >= pageCount}
+                    aria-label={t("org.nextPage")}
                     onClick={() => setPage((n) => Math.min(pageCount - 1, n + 1))}
                   >
                     →
@@ -800,18 +799,9 @@ export default function OrgPage() {
           {/* the reporting line, as a chart rather than a flat list of teams */}
           {shown === "teams" && (
           <>
-          <div className="card">
-            {chart ? (
-              <OrgChart data={chart} />
-            ) : (
-              <p className="text-sm text-text-subtle">Loading…</p>
-            )}
-          </div>
+          {chart ? <OrgChart data={chart} /> : <div className="h-80 skeleton rounded-xl" aria-busy="true" />}
 
-          <p className="text-xs text-text-subtle">
-            {t("org.chart.manageTeam")} opens the full dashboard where you can add/remove members
-            and assign trainings — as HR you have that power on every team.
-          </p>
+          <p className="text-xs text-text-subtle">{t("org.chart.manageNote")}</p>
           </>
           )}
 
@@ -820,14 +810,13 @@ export default function OrgPage() {
               and this panel is where the rest of the population appears. */}
           {source === "both" && (
             <section className="space-y-3 border-t border-edge pt-5">
-              <h2 className="text-lg font-semibold">🎓 {t("org.view.coursera")}</h2>
+              <h2 className="text-lg font-semibold">{t("org.view.coursera")}</h2>
               <CourseraPanel />
             </section>
           )}
         </>
       )}
 
-      {!teams && !error && <p className="text-sm text-text-subtle">Loading…</p>}
     </div>
   );
 }
