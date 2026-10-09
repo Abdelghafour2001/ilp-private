@@ -82,6 +82,12 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        // A wrong answer shakes its head, once.
+        shake: {
+          "0%, 100%": { transform: "translateX(0)" },
+          "25%": { transform: "translateX(-4px)" },
+          "75%": { transform: "translateX(4px)" },
+        },
         "pulse-ring": {
           "0%": { boxShadow: "0 0 0 0 rgb(var(--accent) / 0.5)" },
           "70%": { boxShadow: "0 0 0 8px rgb(var(--accent) / 0)" },

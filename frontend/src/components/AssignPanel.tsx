@@ -120,7 +120,7 @@ export default function AssignPanel({
   return (
     <section className="card space-y-3">
       <div>
-        <h2 className="font-semibold">📌 {t(`assign.title.${entityType}`)}</h2>
+        <h2 className="font-semibold">{t(`assign.title.${entityType}`)}</h2>
         <p className="text-sm text-text-muted">{t("assign.lede")}</p>
       </div>
 

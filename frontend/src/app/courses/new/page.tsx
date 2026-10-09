@@ -1,21 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import CourseBuilder from "@/components/CourseBuilder";
+import { useT } from "@/lib/i18n";
 
 export default function NewCourse() {
+  const t = useT();
   return (
-    <div className="space-y-6">
-      <div>
-        <Link href="/courses" className="text-xs text-text-subtle hover:text-text-muted">
-          ← All courses
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold">Create a course</h1>
-        <p className="mt-1 text-sm text-text-subtle">
-          Mix articles, videos, hands-on labs, and quizzes into a learning path.
-        </p>
-      </div>
-      <CourseBuilder />
-    </div>
+    <CourseBuilder
+      back={{ href: "/courses", label: t("course.back") }}
+      title={t("cb.newTitle")}
+      lede={t("cb.newLede")}
+    />
   );
 }

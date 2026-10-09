@@ -24,6 +24,13 @@ import {
 import { getStoredLearner } from "@/lib/learner";
 import { useT } from "@/lib/i18n";
 import MarkdownLite from "@/components/MarkdownLite";
+import Link from "next/link";
+import Icon, { type IconName } from "@/components/Icon";
+import Modal from "@/components/Modal";
+import CourseCover from "@/components/CourseCover";
+import Field, { FormSection, Segmented } from "@/components/form/Field";
+import SharedEmojiPicker from "@/components/form/EmojiPicker";
+import TagInput, { parseTags } from "@/components/form/TagInput";
 import { F_LESSON_META, F_LESSON_TYPES, FORMATS, FORMAT_META, fmtDuration } from "@/lib/formationLessons";
 
 /* ---------------------------------- state --------------------------------- */
@@ -151,11 +158,28 @@ function fromFormation(f: Formation): { meta: Meta; modules: EModule[] } {
   };
 }
 
-const EMOJIS = ["🎓", "🪄", "🤖", "🧠", "⚡", "🚀", "📊", "🧪", "💬", "🔮"];
 
 /* --------------------------------- builder -------------------------------- */
 
-export default function FormationBuilder({ initial }: { initial?: Formation }) {
+const FORMAT_ICON: Record<TrainingFormat, IconName> = {
+  in_person: "org",
+  virtual: "sessions",
+  hybrid: "route",
+  elearning: "play",
+};
+const LEVEL_DOT: Record<string, string> = { beginner: "bg-good", intermediate: "bg-warn", advanced: "bg-bad" };
+
+export default function FormationBuilder({
+  initial,
+  back,
+  title,
+  lede,
+}: {
+  initial?: Formation;
+  back: { href: string; label: string };
+  title: string;
+  lede?: string;
+}) {
   const t = useT();
   const router = useRouter();
   const seed = initial
@@ -353,268 +377,314 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
   /* --------------------------------- render -------------------------------- */
 
   return (
-    <div className="space-y-4">
-      {/* ---- step indicator ---- */}
-      <div className="flex items-center gap-2 text-sm">
-        {[
-          { n: 1 as const, label: "Basics" },
-          { n: 2 as const, label: "Curriculum" },
-          { n: 3 as const, label: "People" },
-        ].map(({ n, label }, i) => (
-          <div key={n} className="flex items-center gap-2">
-            {i > 0 && <span className="text-text-subtle">→</span>}
-            <button
-              onClick={() => (n === 1 || meta.title.trim()) && setStep(n)}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${
-                step === n
-                  ? "border-accent bg-accent/10 font-medium text-text"
-                  : "border-border text-text-subtle hover:text-text"
-              }`}
-            >
-              <span
-                className={`grid h-5 w-5 place-items-center rounded-full text-xs font-semibold ${
-                  step > n ? "bg-good/20 text-good" : step === n ? "bg-accent/25" : "bg-surface-2"
-                }`}
-              >
-                {step > n ? "✓" : n}
-              </span>
-              {label}
-            </button>
+    <div className="space-y-8">
+      <header>
+        <Link href={back.href} className="inline-flex items-center gap-1 text-sm text-text-subtle hover:text-text">
+          <Icon name="arrow-right" size={14} className="rotate-180" /> {back.label}
+        </Link>
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em]">{title}</h1>
+            {lede && <p className="mt-2 max-w-[62ch] text-sm leading-relaxed text-text-muted">{lede}</p>}
           </div>
-        ))}
-      </div>
+          <ol className="flex items-center gap-1 rounded-xl border border-border bg-surface p-1" aria-label={t("cb.steps")}>
+            {([
+              { n: 1 as const, label: t("fb.step.basics") },
+              { n: 2 as const, label: t("fb.step.curriculum") },
+              { n: 3 as const, label: t("fb.step.people") },
+            ]).map(({ n, label }) => {
+              const on = step === n;
+              return (
+                <li key={n}>
+                  <button
+                    type="button"
+                    disabled={n !== 1 && !meta.title.trim()}
+                    aria-current={on ? "step" : undefined}
+                    onClick={() => setStep(n)}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
+                      on ? "bg-accent/10 font-medium text-accent-text" : "text-text-muted hover:text-text"
+                    }`}
+                  >
+                    <span
+                      className={`grid h-5 w-5 place-items-center rounded-full text-[11px] font-semibold ${
+                        step > n ? "bg-good text-white" : on ? "bg-accent text-accent-fg" : "bg-surface-3"
+                      }`}
+                    >
+                      {step > n ? <Icon name="check" size={11} strokeWidth={3} /> : n}
+                    </span>
+                    {label}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </header>
 
       {/* ---- step 1: basics ---- */}
       {step === 1 && (
-      <div className="card space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <EmojiPicker value={meta.emoji} onChange={(e) => setMeta({ ...meta, emoji: e })} />
-          <input
-            className="min-w-[220px] flex-1 bg-transparent text-xl font-semibold outline-none placeholder:text-text-subtle"
-            placeholder="Name your training…"
-            value={meta.title}
-            onChange={(e) => setMeta({ ...meta, title: e.target.value })}
-          />
-          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
-            {["draft", "published"].map((s) => (
-              <button
-                key={s}
-                onClick={() => setMeta({ ...meta, status: s })}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                  meta.status === s
-                    ? s === "published"
-                      ? "bg-good/15 text-good"
-                      : "bg-warn/15 text-warn"
-                    : "text-text-subtle hover:text-text"
-                }`}
-              >
-                {s === "published" ? "● Published" : "○ Draft"}
-              </button>
-            ))}
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="min-w-0">
+          <div className="panel p-6 sm:p-7">
+            <FormSection step={1} title={t("fb.s.card")} lede={t("fb.s.cardLede")}>
+              <Field id="fb-title" label={t("cb.f.title")} count={meta.title.length} max={70}>
+                <div className="flex gap-2">
+                  <SharedEmojiPicker id="fb-emoji" value={meta.emoji} onChange={(emoji) => setMeta({ ...meta, emoji })} />
+                  <input
+                    id="fb-title"
+                    name="title"
+                    className="input py-2.5 text-base font-medium"
+                    autoComplete="off"
+                    autoFocus={!initial}
+                    placeholder={t("fb.titlePh")}
+                    value={meta.title}
+                    onChange={(e) => setMeta({ ...meta, title: e.target.value })}
+                  />
+                </div>
+              </Field>
+              <Field id="fb-summary" label={t("fb.f.pitch")} hint={t("fb.f.pitchHint")} count={meta.summary.length} max={140}>
+                <input id="fb-summary" name="summary" className="input" autoComplete="off" placeholder={t("fb.pitchPh")} value={meta.summary} onChange={(e) => setMeta({ ...meta, summary: e.target.value })} />
+              </Field>
+              <div className="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)]">
+                <div>
+                  <p className="mb-1.5 text-sm font-medium">{t("cb.f.level")}</p>
+                  <Segmented
+                    label={t("cb.f.level")}
+                    value={meta.level as "beginner"}
+                    onChange={(level) => setMeta({ ...meta, level })}
+                    options={(["beginner", "intermediate", "advanced"] as const).map((l) => ({
+                      value: l as "beginner",
+                      label: (
+                        <span className="inline-flex items-center gap-1.5 capitalize">
+                          <span className={`h-1.5 w-1.5 rounded-full ${LEVEL_DOT[l]}`} />
+                          {t(`common.${l}`, l)}
+                        </span>
+                      ),
+                    }))}
+                  />
+                </div>
+                <Field id="fb-tags" label={t("cb.f.tags")} optional>
+                  <TagInput id="fb-tags" value={parseTags(meta.tags)} onChange={(tags) => setMeta({ ...meta, tags: tags.join(", ") })} />
+                </Field>
+              </div>
+            </FormSection>
+
+            <FormSection step={2} title={t("fb.s.delivery")} lede={t("fb.s.deliveryLede")}>
+              <div>
+                <p className="mb-1.5 text-sm font-medium">{t("fb.f.format")}</p>
+                <div role="radiogroup" aria-label={t("fb.f.format")} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {FORMATS.map((f) => {
+                    const on = meta.format === f;
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => setMeta({ ...meta, format: f })}
+                        className={`flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-[border-color,background-color] ${
+                          on ? "border-accent bg-accent/5 ring-1 ring-accent/30" : "border-border hover:border-border-strong"
+                        }`}
+                      >
+                        <span className={`grid h-8 w-8 place-items-center rounded-lg ${on ? "bg-accent text-accent-fg" : "bg-surface-2 text-text-muted"}`}>
+                          <Icon name={FORMAT_ICON[f]} size={15} />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-medium">{t(`fb.format.${f}`, FORMAT_META[f].label)}</span>
+                          <span className="block text-[11px] leading-snug text-text-subtle">{t(`fb.format.${f}.desc`, FORMAT_META[f].desc)}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <p className="mb-1.5 text-sm font-medium">{t("builder.programType")}</p>
+                  <Segmented
+                    label={t("builder.programType")}
+                    value={meta.source}
+                    onChange={(source) => setMeta({ ...meta, source })}
+                    options={[
+                      { value: "internal" as const, label: t("builder.internal") },
+                      { value: "external" as const, label: t("builder.external") },
+                    ]}
+                  />
+                  <p className="mt-1.5 text-xs text-text-subtle">
+                    {meta.source === "internal" ? t("builder.internalHint") : t("builder.externalHint")}
+                  </p>
+                  {meta.source === "external" && (
+                    <input
+                      className="input mt-2"
+                      aria-label={t("builder.providerPlaceholder")}
+                      placeholder={t("builder.providerPlaceholder")}
+                      value={meta.provider}
+                      onChange={(e) => setMeta({ ...meta, provider: e.target.value })}
+                    />
+                  )}
+                </div>
+                <Field id="fb-hours" label={t("builder.durationHours")} optional hint={t("builder.durationHint")}>
+                  <div className="relative">
+                    <input
+                      id="fb-hours"
+                      className="input pr-10"
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step={0.5}
+                      placeholder={t("builder.durationPlaceholder")}
+                      value={meta.duration_hours}
+                      onChange={(e) => setMeta({ ...meta, duration_hours: e.target.value })}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-subtle">h</span>
+                  </div>
+                </Field>
+              </div>
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 transition-colors hover:border-border-strong">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-[rgb(var(--accent))]"
+                  checked={meta.open_enrollment}
+                  onChange={(e) => setMeta({ ...meta, open_enrollment: e.target.checked })}
+                />
+                <span>
+                  <span className="block text-sm font-medium">{t("fb.f.open")}</span>
+                  <span className="block text-xs text-text-subtle">{t("fb.f.openHint")}</span>
+                </span>
+              </label>
+            </FormSection>
+
+            <FormSection step={3} title={t("fb.s.outcomes")} lede={t("fb.s.outcomesLede")}>
+              <Field id="fb-obj" label={t("fb.f.objectives")} optional hint={t("fb.f.objectivesHint")}>
+                <div className="space-y-2">
+                  {meta.objectives.length > 0 && (
+                    <ol className="space-y-1.5">
+                      {meta.objectives.map((o, i) => (
+                        <li key={i} className="flex items-start gap-2.5 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                          <Icon name="target" size={14} className="mt-0.5 shrink-0 text-accent-text" />
+                          <span className="flex-1">{o}</span>
+                          <button
+                            type="button"
+                            aria-label={t("fb.f.removeObjective")}
+                            className="text-text-subtle hover:text-bad"
+                            onClick={() => setMeta({ ...meta, objectives: meta.objectives.filter((_, k) => k !== i) })}
+                          >
+                            <Icon name="x" size={13} />
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  <input
+                    id="fb-obj"
+                    className="input"
+                    autoComplete="off"
+                    placeholder={t("fb.f.objectivePh")}
+                    value={objDraft}
+                    onChange={(e) => setObjDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && objDraft.trim()) {
+                        e.preventDefault();
+                        setMeta({ ...meta, objectives: [...meta.objectives, objDraft.trim()] });
+                        setObjDraft("");
+                      }
+                    }}
+                  />
+                </div>
+              </Field>
+              <Field id="fb-skills" label={t("fb.f.skills")} optional>
+                {skills.length === 0 ? (
+                  <p id="fb-skills" className="text-xs text-text-subtle">{t("fb.f.noSkills")}</p>
+                ) : (
+                  <div id="fb-skills" className="flex flex-wrap gap-1.5">
+                    {skills.map((sk) => {
+                      const on = skillIds.includes(sk.id);
+                      return (
+                        <button
+                          key={sk.id}
+                          type="button"
+                          title={sk.description}
+                          aria-pressed={on}
+                          onClick={() => setSkillIds((cur) => (on ? cur.filter((i) => i !== sk.id) : [...cur, sk.id]))}
+                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors ${
+                            on ? "border-accent bg-accent/10 font-medium text-accent-text" : "border-border text-text-muted hover:border-border-strong hover:text-text"
+                          }`}
+                        >
+                          {on && <Icon name="check" size={11} strokeWidth={2.5} />}
+                          {sk.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </Field>
+              <Field id="fb-prereq" label={t("fb.f.prereq")} optional>
+                <textarea
+                  id="fb-prereq"
+                  rows={3}
+                  className="input resize-y text-sm"
+                  placeholder={t("fb.f.prereqPh")}
+                  value={meta.prerequisites}
+                  onChange={(e) => setMeta({ ...meta, prerequisites: e.target.value })}
+                />
+              </Field>
+            </FormSection>
           </div>
-        </div>
 
-        <input
-          className="input"
-          placeholder="One-line pitch — what will trainees be able to do afterwards?"
-          value={meta.summary}
-          onChange={(e) => setMeta({ ...meta, summary: e.target.value })}
-        />
-
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-1">
-            {["beginner", "intermediate", "advanced"].map((lv) => (
-              <button
-                key={lv}
-                onClick={() => setMeta({ ...meta, level: lv })}
-                className={`badge transition ${
-                  meta.level === lv ? "badge-accent" : "bg-edge text-text-subtle hover:text-text"
-                }`}
-              >
-                {lv}
-              </button>
-            ))}
-          </div>
-          <input
-            className="input max-w-xs"
-            placeholder="Tags (comma-separated)"
-            value={meta.tags}
-            onChange={(e) => setMeta({ ...meta, tags: e.target.value })}
-          />
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-text-muted">
-            <input
-              type="checkbox"
-              checked={meta.open_enrollment}
-              onChange={(e) => setMeta({ ...meta, open_enrollment: e.target.checked })}
-            />
-            Open enrollment (anyone can join — otherwise invite/code only)
-          </label>
-        </div>
-
-        {/* format */}
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            🎥 Format
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {FORMATS.map((f) => (
-              <button
-                key={f}
-                title={FORMAT_META[f].desc}
-                onClick={() => setMeta({ ...meta, format: f })}
-                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition ${
-                  meta.format === f
-                    ? "border-accent bg-accent/10 font-medium text-text"
-                    : "border-border text-text-subtle hover:text-text"
-                }`}
-              >
-                <span>{FORMAT_META[f].icon}</span>
-                {FORMAT_META[f].label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* internal vs external — an HR reporting axis, not just a label */}
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            🏗 {t("builder.programType")}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {([
-              ["internal", `🏠 ${t("builder.internal")}`, t("builder.internalHint")],
-              ["external", `🏢 ${t("builder.external")}`, t("builder.externalHint")],
-            ] as const).map(([value, label, desc]) => (
-              <button
-                key={value}
-                title={desc}
-                onClick={() => setMeta({ ...meta, source: value })}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition ${
-                  meta.source === value
-                    ? "border-accent bg-accent/10 font-medium text-text"
-                    : "border-border text-text-subtle hover:text-text"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            {meta.source === "external" && (
-              <input
-                className="input max-w-[240px] py-1.5 text-sm"
-                placeholder={t("builder.providerPlaceholder")}
-                value={meta.provider}
-                onChange={(e) => setMeta({ ...meta, provider: e.target.value })}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* declared duration */}
-        <label className="block max-w-xs">
-          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            ⏱️ {t("builder.durationHours")}
-          </span>
-          <input
-            className="input text-sm"
-            type="number"
-            min={0}
-            step={0.5}
-            placeholder={t("builder.durationPlaceholder")}
-            value={meta.duration_hours}
-            onChange={(e) => setMeta({ ...meta, duration_hours: e.target.value })}
-          />
-          <span className="mt-1 block text-xs text-text-subtle">{t("builder.durationHint")}</span>
-        </label>
-
-        {/* prerequisites */}
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            📋 Prerequisites
-          </span>
-          <textarea
-            className="input h-16 text-sm"
-            placeholder="What should trainees know or have done before starting? (leave empty if none)"
-            value={meta.prerequisites}
-            onChange={(e) => setMeta({ ...meta, prerequisites: e.target.value })}
-          />
-        </label>
-
-        {/* skills developed */}
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            🎯 Skills this training develops
-          </p>
-          {skills.length === 0 ? (
-            <p className="text-xs text-text-subtle">
-              No skills in the catalog yet — add some from the Skills page.
+          <div className="sticky bottom-0 z-10 -mx-1 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg/90 px-4 py-3 backdrop-blur-md">
+            <p className="flex items-center gap-2 text-sm text-text-muted" aria-live="polite">
+              {meta.title.trim() ? (
+                <>
+                  <Icon name="check" size={15} className="text-good" /> {t("fb.nextCurriculum")}
+                </>
+              ) : (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-warn" aria-hidden="true" /> {t("fb.need.title")}
+                </>
+              )}
             </p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {skills.map((s) => {
-                const on = skillIds.includes(s.id);
-                return (
-                  <button
-                    key={s.id}
-                    title={s.description}
-                    onClick={() =>
-                      setSkillIds((cur) => (on ? cur.filter((i) => i !== s.id) : [...cur, s.id]))
-                    }
-                    className={`rounded-full border px-3 py-1 text-xs transition ${
-                      on
-                        ? "border-accent bg-accent/15 font-medium text-accent-text"
-                        : "border-border text-text-subtle hover:text-text"
-                    }`}
-                  >
-                    {on ? "✓ " : ""}{s.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* objectives */}
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            🎯 Learning objectives
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {meta.objectives.map((o, i) => (
-              <span key={i} className="badge bg-edge text-text-muted">
-                {o}
-                <button
-                  className="ml-1.5 text-text-subtle hover:text-bad"
-                  onClick={() =>
-                    setMeta({ ...meta, objectives: meta.objectives.filter((_, k) => k !== i) })
-                  }
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
-            <input
-              className="input max-w-xs"
-              placeholder="Add an objective + Enter"
-              value={objDraft}
-              onChange={(e) => setObjDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && objDraft.trim()) {
-                  setMeta({ ...meta, objectives: [...meta.objectives, objDraft.trim()] });
-                  setObjDraft("");
-                }
-              }}
-            />
+            <button type="button" className="btn" disabled={!meta.title.trim()} onClick={() => setStep(2)}>
+              {t("fb.toCurriculum")} <Icon name="arrow-right" size={15} />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-border pt-4">
-          <p className="text-xs text-text-subtle">
-            Next: build the curriculum — modules, lessons and hands-on practice.
+        <aside className="space-y-4 lg:sticky lg:top-24">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-text-subtle">
+            <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" /> {t("create.preview")}
           </p>
-          <button className="btn" disabled={!meta.title.trim()} onClick={() => setStep(2)}>
-            Continue to curriculum →
-          </button>
-        </div>
+          <article aria-hidden="true" className="pointer-events-none select-none">
+            <div className="overflow-hidden rounded-xl border border-border shadow-sm">
+              <CourseCover emoji={meta.emoji || "🎓"} className="aspect-[16/9] rounded-none" />
+            </div>
+            <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-text-subtle">
+              <span className={`h-1.5 w-1.5 rounded-full ${LEVEL_DOT[meta.level]}`} />
+              <span className="capitalize">{t(`common.${meta.level}`, meta.level)}</span>
+              <span>·</span>
+              <span>{t(`fb.format.${meta.format}`, FORMAT_META[meta.format].label)}</span>
+              {meta.duration_hours && (
+                <>
+                  <span>·</span>
+                  <span className="tnum">{meta.duration_hours}&nbsp;h</span>
+                </>
+              )}
+            </p>
+            <h3 className={`mt-1 font-semibold leading-snug ${meta.title ? "text-text" : "text-text-subtle"}`}>{meta.title || t("fb.titlePh")}</h3>
+            <p className="mt-1 line-clamp-2 text-sm text-text-muted">{meta.summary || t("fb.pitchPh")}</p>
+            {meta.objectives.length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {meta.objectives.slice(0, 3).map((o, i) => (
+                  <li key={i} className="flex gap-1.5 text-xs text-text-muted">
+                    <Icon name="check" size={12} className="mt-0.5 shrink-0 text-good" /> <span className="line-clamp-1">{o}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-xs text-text-subtle">
+              {meta.open_enrollment ? t("fb.preview.open") : t("fb.preview.invite")}
+            </p>
+          </article>
+        </aside>
       </div>
       )}
 
@@ -622,20 +692,26 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
       {step >= 2 && (
       <>
       {/* compact recap of step 1 */}
-      <div className="card flex flex-wrap items-center gap-3 py-3">
-        <span className="text-2xl">{meta.emoji || "🎓"}</span>
+      <div className="panel flex flex-wrap items-center gap-3 px-4 py-3">
+        <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-surface-2 text-xl" aria-hidden="true">{meta.emoji || "🎓"}</span>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium">{meta.title || "Untitled formation"}</p>
+          <p className="truncate font-medium">{meta.title || t("cb.untitled")}</p>
           <p className="truncate text-xs text-text-subtle">
-            {meta.level}
+            {t(`common.${meta.level}`, meta.level).replace(/^./, (c) => c.toUpperCase())}
             {meta.summary && ` · ${meta.summary}`}
           </p>
         </div>
-        <span className={`badge ${meta.status === "published" ? "bg-good/15 text-good" : "bg-warn/15 text-warn"}`}>
-          {meta.status}
-        </span>
-        <button className="btn-ghost btn-sm" onClick={() => setStep(1)}>
-          ← Edit details
+        <Segmented
+          label={t("fb.visibility")}
+          value={meta.status as "draft"}
+          onChange={(status) => setMeta({ ...meta, status })}
+          options={[
+            { value: "draft" as const, label: t("fb.draft") },
+            { value: "published" as "draft", label: t("fb.published") },
+          ]}
+        />
+        <button type="button" className="btn-ghost btn-sm" onClick={() => setStep(1)}>
+          <Icon name="pencil" size={13} /> {t("fb.editBasics")}
         </button>
       </div>
       </>
@@ -647,7 +723,7 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
       <div className="grid gap-4 xl:grid-cols-[230px_1fr_380px] lg:grid-cols-[230px_1fr]">
         {/* module rail */}
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">Modules</p>
+          <p className="text-sm font-semibold">{t("fb.modules")}</p>
           {modules.map((m, i) => (
             <div
               key={i}
@@ -664,9 +740,9 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
                   Module {i + 1}
                 </span>
                 <span className="hidden gap-0.5 group-hover:flex">
-                  <button className="btn-icon text-xs" onClick={(e) => { e.stopPropagation(); moveModule(i, i - 1); }}>↑</button>
-                  <button className="btn-icon text-xs" onClick={(e) => { e.stopPropagation(); moveModule(i, i + 1); }}>↓</button>
-                  <button className="btn-icon text-xs text-bad" onClick={(e) => { e.stopPropagation(); removeModule(i); }}>✕</button>
+                  <button type="button" aria-label={t("cb.moveUp")} className="btn-icon h-6 w-6" onClick={(e) => { e.stopPropagation(); moveModule(i, i - 1); }}><Icon name="chevron-down" size={12} className="rotate-180" /></button>
+                  <button type="button" aria-label={t("cb.moveDown")} className="btn-icon h-6 w-6" onClick={(e) => { e.stopPropagation(); moveModule(i, i + 1); }}><Icon name="chevron-down" size={12} /></button>
+                  <button type="button" aria-label={t("fb.removeModule")} className="btn-icon h-6 w-6 hover:text-bad" onClick={(e) => { e.stopPropagation(); removeModule(i); }}><Icon name="trash" size={12} /></button>
                 </span>
               </div>
               {i === mi ? (
@@ -700,19 +776,19 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
               </div>
             </div>
           ))}
-          <button className="btn-ghost w-full" onClick={addModule}>
-            + Add module
+          <button type="button" className="flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border-strong py-2.5 text-sm font-medium text-text-muted transition-colors hover:border-accent hover:text-accent-text" onClick={addModule}>
+            <Icon name="plus" size={14} /> {t("fb.addModule")}
           </button>
         </div>
 
         {/* lesson canvas */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-              Lessons — {mod?.title}
+            <p className="text-sm font-semibold">
+              {t("fb.lessonsIn", { module: mod?.title ?? "" })}
             </p>
-            <button className="btn-soft btn-sm" onClick={() => setPalette(true)}>
-              + Add lesson
+            <button type="button" className="btn-soft btn-sm" onClick={() => setPalette(true)}>
+              <Icon name="plus" size={14} /> {t("fb.addLesson")}
             </button>
           </div>
 
@@ -721,7 +797,7 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
               onClick={() => setPalette(true)}
               className="w-full rounded-xl border-2 border-dashed border-border p-8 text-sm text-text-subtle transition hover:border-accent hover:text-text"
             >
-              This module is empty — add its first lesson
+              {t("fb.emptyModule")}
             </button>
           )}
 
@@ -765,9 +841,9 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
                   />
                   <span className="badge bg-edge text-text-subtle">{m.label}</span>
                   <span className="hidden items-center gap-0.5 sm:flex">
-                    <button className="btn-icon text-xs" onClick={(e) => { e.stopPropagation(); moveLesson(j, j - 1); }}>↑</button>
-                    <button className="btn-icon text-xs" onClick={(e) => { e.stopPropagation(); moveLesson(j, j + 1); }}>↓</button>
-                    <button className="btn-icon text-xs text-bad" onClick={(e) => { e.stopPropagation(); removeLesson(j); }}>✕</button>
+                    <button type="button" aria-label={t("cb.moveUp")} className="btn-icon h-7 w-7" onClick={(e) => { e.stopPropagation(); moveLesson(j, j - 1); }}><Icon name="chevron-down" size={13} className="rotate-180" /></button>
+                    <button type="button" aria-label={t("cb.moveDown")} className="btn-icon h-7 w-7" onClick={(e) => { e.stopPropagation(); moveLesson(j, j + 1); }}><Icon name="chevron-down" size={13} /></button>
+                    <button type="button" aria-label={t("cb.removeLesson")} className="btn-icon h-7 w-7 hover:text-bad" onClick={(e) => { e.stopPropagation(); removeLesson(j); }}><Icon name="trash" size={13} /></button>
                   </span>
                 </div>
 
@@ -776,7 +852,7 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
                     <LessonEditor lesson={lesson} patch={patchLesson} />
                     <div className="flex items-center gap-3">
                       <label className="text-xs text-text-subtle">
-                        ⚡ XP
+                        XP
                         <input
                           type="number"
                           className="input ml-1.5 inline-block w-20"
@@ -785,7 +861,7 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
                         />
                       </label>
                       <label className="text-xs text-text-subtle">
-                        ⏱ Minutes
+                        {t("fb.minutes")}
                         <input
                           type="number"
                           className="input ml-1.5 inline-block w-20"
@@ -803,8 +879,8 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
 
         {/* live preview */}
         <div className="hidden space-y-3 xl:block">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            👁 Trainee preview
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" /> {t("fb.traineePreview")}
           </p>
           <div className="card sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
             {lesson ? <LessonPreview lesson={lesson} /> : <p className="text-sm text-text-subtle">Select a lesson.</p>}
@@ -821,41 +897,35 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
 
       {/* ---- palette ---- */}
       {palette && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm"
-          onClick={() => setPalette(false)}
+        <Modal
+          title={t("fb.palette.title", { module: mod?.title ?? "" })}
+          lede={t("fb.palette.lede")}
+          size="md"
+          onClose={() => setPalette(false)}
         >
-          <div
-            className="w-full max-w-2xl animate-scale-in rounded-2xl border border-border bg-surface p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="mb-1 font-semibold">Add a lesson to “{mod?.title}”</p>
-            <p className="mb-4 text-xs text-text-subtle">
-              Mix theory with practice — the interactive types keep trainees doing, not just reading.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {F_LESSON_TYPES.map((t) => {
-                const m = F_LESSON_META[t];
-                return (
-                  <button
-                    key={t}
-                    onClick={() => addLesson(t)}
-                    className="flex items-start gap-3 rounded-xl border border-border p-3 text-left transition hover:border-accent hover:bg-accent/5"
-                  >
-                    <span className="text-2xl">{m.icon}</span>
-                    <span>
-                      <span className="block text-sm font-medium">
-                        {m.label}
-                        {m.kind === "practice" && <span className="ml-1.5 badge badge-accent">hands-on</span>}
-                      </span>
-                      <span className="block text-xs text-text-subtle">{m.desc}</span>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {F_LESSON_TYPES.map((ty) => {
+              const m = F_LESSON_META[ty];
+              return (
+                <button
+                  key={ty}
+                  type="button"
+                  onClick={() => addLesson(ty)}
+                  className="group flex items-start gap-3 rounded-xl border border-border p-3 text-left transition-[border-color,background-color] hover:border-accent hover:bg-accent/5"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-xl transition-transform group-hover:scale-110" aria-hidden="true">{m.icon}</span>
+                  <span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      {m.label}
+                      {m.kind === "practice" && <span className="badge badge-accent">{t("fb.handsOn")}</span>}
                     </span>
-                  </button>
-                );
-              })}
-            </div>
+                    <span className="block text-xs leading-relaxed text-text-subtle">{m.desc}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </Modal>
       )}
 
       </>
@@ -863,57 +933,73 @@ export default function FormationBuilder({ initial }: { initial?: Formation }) {
 
       {/* ---- step 3: who takes it ---- */}
       {step === 3 && (
-        <div className="card space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-            👥 Who should take this training?
-          </p>
-          <p className="text-sm text-text-muted">
-            Invite people now by handle or email — each gets a notification and an email invite.
-            You can also skip this: team leads and managers can assign the training from their
-            team dashboard at any time.
-          </p>
-          <textarea
-            className="input h-24"
-            placeholder="Handles or emails, separated by commas or new lines…"
-            value={invitees}
-            onChange={(e) => setInvitees(e.target.value)}
-          />
-          {meta.open_enrollment && (
-            <p className="text-xs text-text-subtle">
-              ℹ️ Open enrollment is on — anyone can also join from the catalog without an invite.
-            </p>
-          )}
+        <div className="panel p-6 sm:p-7">
+          <FormSection title={t("fb.s.people")} lede={t("fb.s.peopleLede")}>
+            <Field id="fb-invite" label={t("fb.f.invite")} optional hint={t("fb.f.inviteHint")}>
+              <TagInput
+                id="fb-invite"
+                value={invitees.split(/[\s,;]+/).filter(Boolean)}
+                onChange={(list) => setInvitees(list.join(", "))}
+                placeholder={t("fb.f.invitePh")}
+                max={200}
+              />
+            </Field>
+            {invitees.trim() && (
+              <p className="flex items-center gap-2 text-sm text-text-muted">
+                <Icon name="mail" size={15} className="text-accent-text" />
+                {t("fb.f.inviteCount", { n: invitees.split(/[\s,;]+/).filter(Boolean).length })}
+              </p>
+            )}
+            {meta.open_enrollment && (
+              <p className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-text-muted">
+                <Icon name="team" size={14} className="mt-px shrink-0 text-text-subtle" />
+                {t("fb.f.openNote")}
+              </p>
+            )}
+          </FormSection>
         </div>
       )}
 
       {step >= 2 && (
       <>
       {/* ---- save bar ---- */}
-      {error && <div className="card border-bad/40 text-sm text-bad">{error}</div>}
-      <div className="sticky bottom-4 z-10 flex items-center justify-between rounded-2xl border border-border bg-surface/95 p-3 shadow-lg backdrop-blur">
-        <p className="text-xs text-text-subtle">
-          {stats.lessons} lessons · {stats.practice} hands-on · ⚡{stats.xp} XP · {fmtDuration(stats.min)}
-          {meta.status === "draft" && " · saved as draft (invisible to trainees)"}
+      {error && (
+        <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+          {error}
+        </p>
+      )}
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg/90 px-4 py-3 backdrop-blur-md">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-subtle tnum">
+          <span>{t("fb.stat.lessons", { n: stats.lessons })}</span>
+          <span>{t("fb.stat.handsOn", { n: stats.practice })}</span>
+          <span className="inline-flex items-center gap-0.5">
+            <Icon name="bolt" size={11} className="text-iris" /> {stats.xp}&nbsp;XP
+          </span>
+          <span className="inline-flex items-center gap-0.5">
+            <Icon name="clock" size={11} /> {fmtDuration(stats.min)}
+          </span>
+          {meta.status === "draft" && <span className="text-warn">{t("fb.draftNote")}</span>}
         </p>
         <div className="flex items-center gap-2">
           {step === 2 && (
-            <button className="btn-ghost" onClick={() => setStep(3)}>
-              👥 People →
+            <button type="button" className="btn-ghost" onClick={() => setStep(3)}>
+              {t("fb.step.people")} <Icon name="arrow-right" size={15} />
             </button>
           )}
           {step === 3 && (
-            <button className="btn-ghost" onClick={() => setStep(2)}>
-              ← Curriculum
+            <button type="button" className="btn-ghost" onClick={() => setStep(2)}>
+              <Icon name="arrow-right" size={15} className="rotate-180" /> {t("fb.step.curriculum")}
             </button>
           )}
-          <button className="btn" onClick={save} disabled={busy || !meta.title.trim()}>
+          <button type="button" className="btn" onClick={save} disabled={busy || !meta.title.trim()} aria-busy={busy}>
+            {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />}
             {busy
-              ? "Saving…"
+              ? t("common.saving", "Saving…")
               : initial
-                ? "💾 Save changes"
+                ? t("cb.saveChanges")
                 : meta.status === "published"
-                  ? "🚀 Publish training"
-                  : "💾 Save draft"}
+                  ? t("fb.publish")
+                  : t("cb.saveDraft")}
           </button>
         </div>
       </div>
@@ -931,37 +1017,6 @@ function Stat({ label, value }: { label: string; value: number | string }) {
       <span className="block text-sm font-semibold text-text">{value}</span>
       {label}
     </span>
-  );
-}
-
-function EmojiPicker({ value, onChange }: { value: string; onChange: (e: string) => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        className="grid h-12 w-12 place-items-center rounded-xl border border-border text-2xl transition hover:border-accent"
-        onClick={() => setOpen((o) => !o)}
-        title="Pick an emoji"
-      >
-        {value || "🎓"}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-14 z-20 grid grid-cols-5 gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg">
-          {EMOJIS.map((e) => (
-            <button
-              key={e}
-              className="grid h-9 w-9 place-items-center rounded-lg text-xl hover:bg-surface-2"
-              onClick={() => {
-                onChange(e);
-                setOpen(false);
-              }}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -1338,7 +1393,7 @@ function LessonPreview({ lesson }: { lesson: ELesson }) {
               </ul>
             </div>
           )}
-          <PreviewPromptBox input={lesson.challenge_input} cta="🚀 Run & submit for grading" />
+          <PreviewPromptBox input={lesson.challenge_input} cta="Run & submit for grading" />
         </>
       )}
     </div>

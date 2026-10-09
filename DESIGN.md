@@ -193,20 +193,82 @@ elements use a smaller radius than their container.
 - While a request runs, keep the button and show a spinner + "Saving…"; don't
   disable it before the click.
 
+### Sections and panels
+- Section title (`h2`, `text-base font-semibold`) sits **above** its panel, not
+  inside a header bar. Meta (counts, "View all") aligns right on the same line.
+- Inside a panel, split content with `divide-y` / `divide-x` and borders —
+  never cards nested in cards.
+- Lists of destinations are rows (`icon · label · one-line desc`), not grids of
+  big cards. A row's hover is a `bg-surface-2` wash.
+- Several numbers about one thing (level, XP, streak, rank) go in **one**
+  composed panel with a headline and a `<dl>` strip, not N identical stat boxes.
+- Empty and "ask AI" states: a dashed `border-border-strong` box with one
+  sentence and the action.
+
 ### Cards
 `.card` for content blocks, `.card-hover` only when the whole card is a link.
-A clickable card is an `<a>`/`<Link>`, not a `div` with `onClick`.
+A clickable card is an `<a>`/`<Link>`, or a `<button>` when it opens a Modal;
+never a `div` with `onClick`.
+
+### Course covers
+`components/CourseCover.tsx`: real image when there is one; otherwise a
+chart-hue wash + fading dot grid (hue picked from the title hash) with the
+course emoji on a raised tile. Provider courses show the platform colour as a
+top strip and a small mark, never as a full-bleed brand block. Card meta reads
+`● Level · Provider ↗ · 12 h` as a quiet line above the title, not badges.
 
 ### Forms
-- `.label` + control, linked with `htmlFor`/`id`. Placeholders show an example
-  and end with `…`; they are not labels.
-- Correct `type`, `name`, `autoComplete`; `spellCheck={false}` on emails,
-  codes and handles.
-- Errors inline, under the field, in `text-bad`, saying how to fix it. Focus
-  the first invalid field on submit.
+Everything lives in `components/form/`; use it instead of bare inputs.
+
+- `Field`: label above, control, then the error *or* the hint. Optional fields
+  say "optional"; fields that land on a card get a `count/max` counter.
+  Placeholders show an *example* ("Cut invoice matching time in half"), never
+  the label.
+- `FormSection`: a long form is 2–3 titled sections (title + one-line lede in a
+  left column on wide screens), not one endless stack.
+- Choices: `Segmented` for 2–4 short options, selectable cards (icon + title +
+  one line) when each option needs explaining, chips for many. Avoid a native
+  `<select>` for fewer than ~6 options.
+- `TagInput` for tags (chips, popular suggestions from `usePopularTags`),
+  `EmojiPicker` for an item's icon, `FileDrop` for uploads (validates type and
+  size before upload), `MarkdownField` for long text (Write / Preview tabs).
+- Correct `type`, `inputMode`, `name`, `autoComplete`; `spellCheck={false}` on
+  emails, URLs, handles and code.
+- Validate as people type, but only show an error once a field has content.
+  An optional field holding something invalid still blocks submit.
+
+### Create pages
+`CreateLayout` is the frame for every "create something" page:
+- **Live preview** of the card as the catalogue will show it, beside the form.
+- **Checklist**: required items block submit, the rest are suggestions; it
+  fills in as the form does.
+- **Sticky action bar**: names the one thing still blocking ("Still needed:
+  Title") rather than silently greying the button; Cancel + primary submit
+  with a spinner while saving.
+- Multi-step builders (course, training) use the same pieces plus step pills in
+  the header; a step can't be skipped while the one before it is blocked.
+
+### Lesson players
+Outline as a stepper on the left (done / current / to do), a reading column
+capped at ~70ch with 15px body text, a slim progress bar in the header,
+previous/next cards naming the lessons, ← → to move, and a finish screen.
+Players open on the first lesson not yet done.
+
+### Tables
+- Header row: sentence case, `text-xs text-text-subtle`, `bg-surface-2/60`.
+- Numbers right-aligned with `.tnum`; never colour a number just to decorate it.
+- Wide tables scroll inside their panel: `panel relative overflow-x-auto` plus a
+  `min-w-[…]` on the `<table>`. The `relative` matters: without it a
+  `sr-only` child escapes the clip and the whole page scrolls sideways.
+- Row actions: a `btn-ghost btn-sm` for the main one, an icon button (with
+  `aria-label`) for destructive ones, which still confirm.
+- An action that needs a choice opens one Modal with the choice inside it. It
+  never depends on a control somewhere else on the page.
 
 ### Modal
-Use `components/Modal.tsx`, never a hand-rolled overlay. Long forms become a
+Use `components/Modal.tsx`, never a hand-rolled overlay. It portals to `<body>`,
+moves focus into the dialog and back to the opener on close, and closes on Esc
+and backdrop click. Long forms become a
 wizard via `steps`, not a taller popup.
 
 ### Navigation

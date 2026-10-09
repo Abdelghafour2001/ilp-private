@@ -23,10 +23,10 @@ export default function Topbar({ onMenu }: { onMenu: () => void }) {
       {/* command palette trigger — doubles as global search */}
       <button
         onClick={openCommand}
-        className="group flex h-9 max-w-md flex-1 items-center gap-2.5 rounded-lg border border-border bg-surface px-3 text-sm text-text-subtle shadow-xs transition-colors hover:border-border-strong hover:bg-surface-2 md:flex-initial md:w-72"
+        className="group flex h-9 min-w-0 max-w-md flex-1 items-center gap-2.5 rounded-lg border border-border bg-surface px-3 text-sm text-text-subtle shadow-xs transition-colors hover:border-border-strong hover:bg-surface-2 md:flex-initial md:w-72"
       >
         <Icon name="search" size={16} />
-        <span className="flex-1 text-left">{t("shell.search")}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{t("shell.search")}</span>
         <span className="hidden items-center gap-1 sm:flex">
           <span className="kbd">⌘</span>
           <span className="kbd">K</span>

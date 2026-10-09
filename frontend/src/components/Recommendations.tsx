@@ -6,6 +6,7 @@ import Icon from "@/components/Icon";
 import { api } from "@/lib/api";
 import type { LearningPath } from "@/lib/ai";
 import { getStoredLearner } from "@/lib/learner";
+import { useT } from "@/lib/i18n";
 
 const DIFF: Record<string, string> = {
   beginner: "badge-good",
@@ -16,6 +17,7 @@ const DIFF: Record<string, string> = {
 /** On-demand "what to learn next" — an LLM call, so it's triggered by the user
  * rather than run on every dashboard load. */
 export default function Recommendations() {
+  const t = useT();
   const [path, setPath] = useState<LearningPath | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,63 +36,79 @@ export default function Recommendations() {
   }
 
   return (
-    <section className="panel overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
-        <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-sheen text-white shadow-glow">
-            <Icon name="sparkles" size={19} />
-          </span>
-          <div>
-            <h2 className="text-lg font-semibold">Your learning path</h2>
-            <p className="text-sm text-text-muted">AI-picked next steps based on your progress</p>
-          </div>
+    <section>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            {t("path.title")}
+            <span className="badge bg-surface-3 font-normal text-text-subtle">
+              <Icon name="sparkles" size={11} aria-hidden="true" /> AI
+            </span>
+          </h2>
+          <p className="mt-0.5 text-sm text-text-muted">{t("path.lede")}</p>
         </div>
-        <button className="btn" onClick={generate} disabled={busy}>
-          {busy ? "Thinking…" : path ? "Refresh" : "Suggest next steps"}
+        <button className="btn-ghost btn-sm" onClick={generate} disabled={busy} aria-busy={busy}>
+          {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />}
+          {busy ? t("path.thinking") : path ? t("path.refresh") : t("path.suggest")}
         </button>
       </div>
 
-      {error && <p className="p-5 text-sm text-bad">{error}</p>}
+      <div aria-live="polite">
+        {error && <p className="panel p-5 text-sm text-bad">{error}</p>}
 
-      {path && (
-        <div className="p-5">
-          <p className="mb-4 text-sm text-text-muted">{path.summary}</p>
+        {busy && !path && (
           <div className="grid gap-3 sm:grid-cols-2">
-            {path.recommendations.map((r) => (
-              <Link
-                key={r.lab_id}
-                href={`/labs/${r.lab_id}`}
-                className="card card-hover group block"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-text">{r.title}</span>
-                  <span className={`badge ${DIFF[r.difficulty] ?? "badge-accent"} shrink-0`}>
-                    {r.difficulty}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-sm text-text-muted">{r.reason}</p>
-                <span className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-accent-text">
-                  Start
-                  <Icon
-                    name="arrow-right"
-                    size={14}
-                    className="transition-transform group-hover:translate-x-0.5"
-                  />
-                </span>
-              </Link>
+            {[0, 1].map((i) => (
+              <div key={i} className="panel space-y-2 p-5">
+                <div className="h-4 w-2/3 skeleton" />
+                <div className="h-3 w-full skeleton" />
+                <div className="h-3 w-4/5 skeleton" />
+              </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {!path && !error && (
-        <div className="p-5">
-          <p className="text-sm text-text-subtle">
-            Get a personalized sequence of labs to work through next — built from what you&apos;ve
-            already completed.
-          </p>
-        </div>
-      )}
+        {path && (
+          <>
+            <p className="mb-3 max-w-[65ch] text-sm text-text-muted">{path.summary}</p>
+            <ol className="panel divide-y divide-border overflow-hidden">
+              {path.recommendations.map((r, i) => (
+                <li key={r.lab_id}>
+                  <Link
+                    href={`/labs/${r.lab_id}`}
+                    className="group flex items-start gap-4 p-4 transition-colors hover:bg-surface-2"
+                  >
+                    <span className="mt-0.5 font-mono text-xs text-text-subtle tnum">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-text group-hover:text-accent-text">{r.title}</span>
+                        <span className={`badge ${DIFF[r.difficulty] ?? "badge-accent"}`}>
+                          {t(`common.${r.difficulty}`, r.difficulty)}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-sm text-text-muted">{r.reason}</span>
+                    </span>
+                    <Icon
+                      name="arrow-right"
+                      size={16}
+                      aria-hidden="true"
+                      className="mt-0.5 shrink-0 text-text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-accent-text"
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+
+        {!path && !error && !busy && (
+          <div className="rounded-xl border border-dashed border-border-strong px-5 py-6 text-sm text-text-muted">
+            {t("path.empty")}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

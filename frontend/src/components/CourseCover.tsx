@@ -56,16 +56,13 @@ export default function CourseCover({
   const [failed, setFailed] = useState(false);
   const showImage = !!coverUrl && !failed;
   const brand = providerStyle(provider);
+  // Each artless course gets one of the chart hues, picked from its emoji so
+  // the builder's live preview, the catalogue and the course page all agree,
+  // and the grid doesn't read as one flat tint.
+  const hue = `var(--chart-${(hash(emoji) % 6) + 1})`;
 
   return (
-    <div
-      className={`relative w-full overflow-hidden rounded-lg bg-surface-2 ${className}`}
-      style={
-        !showImage && brand
-          ? { backgroundImage: `linear-gradient(135deg, ${brand.from}, ${brand.to})` }
-          : undefined
-      }
-    >
+    <div className={`relative w-full overflow-hidden rounded-lg bg-surface-2 ${className}`}>
       {showImage ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element -- remote
@@ -76,24 +73,37 @@ export default function CourseCover({
             alt=""
             loading="lazy"
             onError={() => setFailed(true)}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
           />
-          <span className="pointer-events-none absolute inset-0 grid place-items-center">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white backdrop-blur-sm">
+          <span className="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden="true">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-black/55 pl-0.5 text-white backdrop-blur-sm">
               ▶
             </span>
           </span>
         </>
       ) : brand ? (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-white">
-          <span className="text-2xl font-bold tracking-tight drop-shadow">{brand.mark}</span>
-          <span className="text-[11px] font-medium uppercase tracking-widest opacity-90">
-            {provider}
+        // The platform's colour as an accent, not as a wall: a full-bleed
+        // Coursera blue next to calm cards out-shouts every in-house course.
+        <div className="relative flex h-full w-full items-end p-4" aria-hidden="true">
+          <Pattern color={brand.from} />
+          <span className="absolute inset-x-0 top-0 h-1" style={{ background: brand.from }} />
+          <span className="relative flex items-center gap-2.5">
+            <span
+              className="grid h-9 min-w-9 place-items-center rounded-lg px-1.5 text-sm font-bold tracking-tight text-white shadow-sm"
+              style={{ background: `linear-gradient(135deg, ${brand.from}, ${brand.to})` }}
+            >
+              {brand.mark}
+            </span>
+            <span className="text-sm font-semibold text-text">{provider}</span>
           </span>
         </div>
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-accent/15 to-iris/10">
-          <span className="text-4xl" aria-hidden>
+        <div className="relative flex h-full w-full items-end p-4" aria-hidden="true">
+          <Pattern color={`rgb(${hue})`} />
+          <span
+            className="relative grid h-14 w-14 place-items-center rounded-2xl border bg-surface text-3xl shadow-sm transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:rotate-[-4deg]"
+            style={{ borderColor: `rgb(${hue} / 0.25)` }}
+          >
             {emoji}
           </span>
         </div>
@@ -101,4 +111,31 @@ export default function CourseCover({
       {title && <span className="sr-only">{title}</span>}
     </div>
   );
+}
+
+/** A soft wash of the hue plus a dot grid that fades out toward the corner. */
+function Pattern({ color }: { color: string }) {
+  return (
+    <>
+      <span
+        className="absolute inset-0 opacity-[0.22] dark:opacity-[0.22]"
+        style={{ background: `radial-gradient(120% 120% at 100% 0%, ${color}, transparent 70%)` }}
+      />
+      <span
+        className="absolute inset-0 opacity-50 dark:opacity-30"
+        style={{
+          backgroundImage: `radial-gradient(${color} 1px, transparent 1.2px)`,
+          backgroundSize: "14px 14px",
+          maskImage: "linear-gradient(225deg, black 10%, transparent 65%)",
+          WebkitMaskImage: "linear-gradient(225deg, black 10%, transparent 65%)",
+        }}
+      />
+    </>
+  );
+}
+
+function hash(s: string) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }
