@@ -1,0 +1,80 @@
+id: duckdb
+name: DuckDB
+category: Analytics
+emoji: 🦆
+difficulty: intermediate
+summary: An in-process analytics database — "SQLite for analytics." Query CSV/Parquet/Postgres locally at speed.
+tags: [duckdb, olap, parquet, analytics, local]
+prerequisites:
+  - Python 3.9+ or the standalone CLI
+  - No server, no Docker
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      DuckDB runs *inside your process* — zero setup, columnar, vectorized, and
+      shockingly fast on a laptop. It reads Parquet/CSV/JSON directly and can
+      attach Postgres, making it the ideal tool for local analytics, testing
+      transformations, and prototyping before you reach for Spark.
+
+  - type: md
+    body: |
+      ## Install
+  - type: code
+    language: bash
+    body: |
+      pip install duckdb            # Python
+      # or the CLI:  https://duckdb.org/docs/installation/
+
+  - type: md
+    body: |
+      ## Query files directly (no load step)
+  - type: code
+    language: python
+    body: |
+      import duckdb
+
+      # query a Parquet/CSV file as if it were a table
+      duckdb.sql("SELECT count(*) FROM 'orders.parquet'").show()
+      duckdb.sql("""
+          SELECT status, sum(amount) AS revenue
+          FROM 'orders.csv'
+          WHERE amount >= 0
+          GROUP BY status
+          ORDER BY revenue DESC
+      """).show()
+
+  - type: md
+    body: |
+      ## Attach Postgres and join across engines
+  - type: code
+    language: sql
+    body: |
+      INSTALL postgres; LOAD postgres;
+      ATTACH 'host=localhost port=5434 dbname=demo user=demo password=demo' AS pg (TYPE postgres);
+
+      -- join a local Parquet file to a live Postgres table
+      SELECT c.full_name, sum(o.amount) AS ltv
+      FROM read_parquet('orders.parquet') o
+      JOIN pg.public.customers c ON o.customer_id = c.id
+      GROUP BY 1 ORDER BY 2 DESC;
+
+  - type: md
+    body: |
+      ## Convert / export
+  - type: code
+    language: sql
+    body: |
+      -- CSV → Parquet in one line
+      COPY (SELECT * FROM 'big.csv') TO 'big.parquet' (FORMAT PARQUET);
+
+use_cases:
+  - title: Local analytics on big files
+    body: Crunch multi-GB Parquet on a laptop without standing up a warehouse — exploratory analysis at interactive speed.
+  - title: Fast unit tests for transformations
+    body: Run dbt/SQL logic against DuckDB in CI for sub-second test suites instead of spinning up Postgres.
+  - title: Format conversion & cleaning
+    body: CSV ↔ Parquet ↔ JSON conversions and one-off cleanups without a Spark cluster.
+  - title: Embedded analytics
+    body: Ship DuckDB inside an app or notebook to give users SQL over their own files with no infrastructure.

@@ -1,0 +1,109 @@
+id: spark
+name: Apache Spark
+category: Compute
+emoji: ⚡
+difficulty: advanced
+summary: A standalone Spark cluster (master + workers) with the web UI, plus a quick local PySpark path.
+tags: [spark, pyspark, etl, big-data, compute]
+prerequisites:
+  - Docker (for the cluster) or Python 3.10+ (for local PySpark)
+  - Java is bundled in the images / pip wheels
+
+blocks:
+  - type: md
+    body: |
+      ## Two ways to run
+      - **Quick local** — `pip install pyspark`, great for learning the API.
+      - **Cluster** — a master + 2 workers so you can watch parallelism on the
+        Spark UI (http://localhost:8081) and submit real jobs.
+
+  - type: md
+    body: |
+      ## Quick local PySpark
+  - type: code
+    language: python
+    filename: wordcount.py
+    body: |
+      # pip install pyspark
+      from pyspark.sql import SparkSession, functions as F
+
+      spark = SparkSession.builder.appName("demo").getOrCreate()
+
+      df = spark.createDataFrame(
+          [("alice", 120.5), ("bob", -5.0), ("alice", 60.0)],
+          ["customer", "amount"],
+      )
+      (df.groupBy("customer")
+         .agg(F.sum("amount").alias("ltv"), F.count("*").alias("orders"))
+         .show())
+
+      spark.stop()
+
+  - type: md
+    body: |
+      ## Cluster (master + 2 workers)
+  - type: code
+    language: yaml
+    filename: docker-compose.spark.yml
+    body: |
+      services:
+        spark:
+          image: bitnami/spark:3.5
+          environment:
+            - SPARK_MODE=master
+          ports:
+            - "8081:8080"     # master web UI
+            - "7077:7077"     # cluster submit port
+        spark-worker-1:
+          image: bitnami/spark:3.5
+          environment:
+            - SPARK_MODE=worker
+            - SPARK_MASTER_URL=spark://spark:7077
+            - SPARK_WORKER_CORES=2
+            - SPARK_WORKER_MEMORY=2G
+          depends_on: [spark]
+        spark-worker-2:
+          image: bitnami/spark:3.5
+          environment:
+            - SPARK_MODE=worker
+            - SPARK_MASTER_URL=spark://spark:7077
+            - SPARK_WORKER_CORES=2
+            - SPARK_WORKER_MEMORY=2G
+          depends_on: [spark]
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.spark.yml up -d
+      # Spark master UI: http://localhost:8081
+
+      # submit the bundled Pi example to the cluster
+      docker exec -it $(docker compose -f docker-compose.spark.yml ps -q spark) \
+        spark-submit --master spark://spark:7077 \
+        /opt/bitnami/spark/examples/src/main/python/pi.py 100
+
+  - type: md
+    body: |
+      ## Submit your own job
+  - type: code
+    language: bash
+    body: |
+      # copy a script into the master, then submit it
+      docker compose -f docker-compose.spark.yml cp wordcount.py spark:/tmp/wordcount.py
+      docker exec -it $(docker compose -f docker-compose.spark.yml ps -q spark) \
+        spark-submit --master spark://spark:7077 /tmp/wordcount.py
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.spark.yml down
+
+use_cases:
+  - title: Large-scale ETL
+    body: Join and aggregate datasets that don't fit in memory on one box; Spark partitions the work across the cluster.
+  - title: Data-quality at scale
+    body: Run the same completeness/uniqueness/range checks as DQ-AI, but over billions of rows by expressing them as Spark SQL aggregations.
+  - title: Backfills & reprocessing
+    body: Recompute months of derived tables in parallel after a logic fix, then swap partitions atomically.
+  - title: Feature engineering for ML
+    body: Build training datasets from raw events with windowed aggregations before handing off to your ML stack.

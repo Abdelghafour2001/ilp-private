@@ -1,0 +1,116 @@
+id: dbt
+name: dbt + Postgres
+category: Transformation
+emoji: 🧱
+difficulty: intermediate
+summary: Analytics-engineering with dbt against a local Postgres — models, tests, docs, lineage.
+tags: [dbt, sql, transformation, testing, analytics-engineering]
+prerequisites:
+  - Docker (for Postgres) and Python 3.10+
+  - "Reuses DQ-AI's app-db, or any Postgres"
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      A working dbt project that builds models and runs **data tests** against
+      Postgres. dbt is the de-facto standard for the "T" in ELT — version-
+      controlled SQL, dependency-ordered builds, tests, and auto-generated docs
+      with lineage.
+
+  - type: md
+    body: |
+      ## A throwaway Postgres (skip if you have one)
+  - type: code
+    language: bash
+    body: |
+      docker run -d --name dbt-pg -p 5440:5432 \
+        -e POSTGRES_USER=dbt -e POSTGRES_PASSWORD=dbt -e POSTGRES_DB=analytics \
+        postgres:16
+
+  - type: md
+    body: |
+      ## Install dbt and scaffold a project
+  - type: code
+    language: bash
+    body: |
+      python -m venv .venv && source .venv/bin/activate   # win: .venv\Scripts\activate
+      pip install dbt-postgres
+      dbt init analytics            # pick "postgres" when prompted
+
+  - type: md
+    body: |
+      ## Configure the connection
+      Put this in `~/.dbt/profiles.yml`:
+  - type: code
+    language: yaml
+    filename: ~/.dbt/profiles.yml
+    body: |
+      analytics:
+        target: dev
+        outputs:
+          dev:
+            type: postgres
+            host: localhost
+            port: 5440
+            user: dbt
+            password: dbt
+            dbname: analytics
+            schema: public
+            threads: 4
+
+  - type: md
+    body: |
+      ## A model + tests
+      `models/customers.sql`:
+  - type: code
+    language: sql
+    filename: models/customers.sql
+    body: |
+      with source as (
+          select * from {{ ref('stg_orders') }}
+      )
+      select
+          customer_id,
+          count(*)        as order_count,
+          sum(amount)     as lifetime_value
+      from source
+      group by 1
+
+  - type: md
+    body: |
+      `models/schema.yml` — declarative tests (dbt's built-in DQ):
+  - type: code
+    language: yaml
+    filename: models/schema.yml
+    body: |
+      version: 2
+      models:
+        - name: customers
+          columns:
+            - name: customer_id
+              tests: [unique, not_null]
+            - name: lifetime_value
+              tests:
+                - dbt_utils.accepted_range:
+                    min_value: 0
+
+  - type: md
+    body: |
+      ## Build, test, document
+  - type: code
+    language: bash
+    body: |
+      dbt run         # build all models
+      dbt test        # run all data tests
+      dbt docs generate && dbt docs serve   # lineage graph at http://localhost:8080
+
+use_cases:
+  - title: Layered transformation (staging → marts)
+    body: Model raw → staging → intermediate → marts with `ref()` so dbt builds them in dependency order and you get a lineage DAG for free.
+  - title: Tests as contracts in CI
+    body: Run `dbt build` (run + test) in CI on every PR; a failing not_null/unique/relationship test blocks the merge. This is where DQ-AI's check concepts meet production.
+  - title: Slowly Changing Dimensions
+    body: Use dbt snapshots to track history of mutable source rows (e.g. customer address changes) without hand-writing SCD Type-2 logic.
+  - title: Reusable macros
+    body: Encapsulate org SQL conventions (surrogate keys, money rounding, timezone handling) in macros so every model is consistent.

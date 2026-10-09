@@ -1,0 +1,58 @@
+id: python-basics
+title: Python Basics (live)
+track: Programming
+difficulty: beginner
+summary: Write real Python in your browser — it runs and grades instantly, no setup.
+tags: [python, coding, programming]
+dataset:
+  schema: public
+  table: customers
+
+steps:
+  - id: intro
+    type: concept
+    title: A real Python runtime, in your tab
+    body_md: |
+      These exercises run actual Python in your browser (via Pyodide) — no
+      install, no server. Write code, hit **Run tests**, and they grade instantly.
+
+  - id: add
+    type: exercise
+    title: Write a function
+    xp: 25
+    body_md: |
+      Implement `add(a, b)` so it returns the sum of its two arguments.
+    builder:
+      mode: code
+      language: python
+      starter_code: |
+        def add(a, b):
+            # your code here
+            pass
+      test_code: |
+        assert add(2, 3) == 5
+        assert add(-1, 1) == 0
+        assert add(0, 0) == 0
+    grader:
+      type: code
+
+  - id: evens
+    type: challenge
+    title: Filter even numbers
+    xp: 35
+    body_md: |
+      Implement `evens(nums)` that returns a list of only the even numbers,
+      preserving order.
+    builder:
+      mode: code
+      language: python
+      starter_code: |
+        def evens(nums):
+            # your code here
+            return []
+      test_code: |
+        assert evens([1, 2, 3, 4, 5, 6]) == [2, 4, 6]
+        assert evens([1, 3, 5]) == []
+        assert evens([]) == []
+    grader:
+      type: code

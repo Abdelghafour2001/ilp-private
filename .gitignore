@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+backend/.env
+backend/uploads/
+
+# Node / Next
+node_modules/
+.next/
+frontend/.env*.local
+frontend/tsconfig.tsbuildinfo
+next-env.d.ts
+
+# OS
+.DS_Store
+Thumbs.db
+.env
+
+
+# Celery beat runtime state
+celerybeat-schedule
+celerybeat.pid

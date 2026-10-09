@@ -1,0 +1,109 @@
+id: rag-local
+name: "Scenario: Local RAG (Ollama + Qdrant)"
+category: Scenario
+emoji: 🔎
+difficulty: expert
+summary: A complete retrieval-augmented-generation pipeline running fully on your laptop — embed, store, retrieve, answer.
+tags: [rag, ollama, qdrant, embeddings, llm, scenario]
+prerequisites:
+  - Docker + Compose, ~6 GB RAM
+  - Builds on the Ollama and Qdrant recipes
+
+blocks:
+  - type: md
+    body: |
+      ## The scenario
+      You want an LLM to answer questions about *your* documents without making
+      things up — and without sending anything to the cloud. This wires up a full
+      **RAG** loop locally: Ollama provides embeddings + generation, Qdrant stores
+      and retrieves the relevant chunks.
+
+      Flow: docs → embed (Ollama) → store (Qdrant) → on a question, embed it,
+      retrieve top-k similar chunks, stuff them into the prompt → answer (Ollama).
+
+  - type: code
+    language: yaml
+    filename: docker-compose.rag.yml
+    body: |
+      services:
+        ollama:
+          image: ollama/ollama
+          ports: ["11434:11434"]
+          volumes: ["ollama:/root/.ollama"]
+        qdrant:
+          image: qdrant/qdrant
+          ports: ["6333:6333"]
+          volumes: ["qdrant:/qdrant/storage"]
+      volumes:
+        ollama:
+        qdrant:
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.rag.yml up -d
+      docker exec -it $(docker compose -f docker-compose.rag.yml ps -q ollama) ollama pull llama3.1
+      docker exec -it $(docker compose -f docker-compose.rag.yml ps -q ollama) ollama pull nomic-embed-text
+
+  - type: md
+    body: |
+      ## The pipeline (one Python file)
+  - type: code
+    language: python
+    filename: rag.py
+    body: |
+      # pip install ollama qdrant-client
+      import ollama
+      from qdrant_client import QdrantClient
+      from qdrant_client.models import Distance, VectorParams, PointStruct
+
+      EMBED, CHAT = "nomic-embed-text", "llama3.1"
+      qc = QdrantClient(url="http://localhost:6333")
+
+      def embed(text: str):
+          return ollama.embeddings(model=EMBED, prompt=text)["embedding"]
+
+      # 1. our "knowledge base" (chunks)
+      docs = [
+          "An order with a negative amount is always invalid and must be rejected.",
+          "Customer emails must be unique; duplicates indicate a merge bug.",
+          "Freshness SLAs require the orders table to update within 2 hours.",
+          "The customers table is considered healthy above 1000 rows.",
+      ]
+
+      # 2. index them
+      dim = len(embed("dimension probe"))
+      qc.recreate_collection("kb", vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+      qc.upsert("kb", [PointStruct(id=i, vector=embed(d), payload={"text": d})
+                       for i, d in enumerate(docs)])
+
+      # 3. answer a question with retrieved context
+      def ask(question: str) -> str:
+          hits = qc.search("kb", query_vector=embed(question), limit=2, with_payload=True)
+          context = "\n".join(h.payload["text"] for h in hits)
+          prompt = (f"Answer using ONLY the context.\n\nContext:\n{context}\n\n"
+                    f"Question: {question}")
+          return ollama.chat(model=CHAT, messages=[{"role": "user", "content": prompt}])["message"]["content"]
+
+      print(ask("Is a -$5 order valid?"))
+
+  - type: code
+    language: bash
+    body: |
+      python rag.py
+      # → grounded answer citing the negative-amount rule, not a guess
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.rag.yml down -v
+
+use_cases:
+  - title: Private knowledge assistant
+    body: Answer questions over internal runbooks, data dictionaries, or policies without any data leaving your infrastructure.
+  - title: Grounded support bots
+    body: Reduce hallucination by forcing answers to come from retrieved, citeable chunks of your own content.
+  - title: Onboarding helper
+    body: Index your team's docs so new engineers can ask questions in plain English and get sourced answers.
+  - title: Cheap RAG prototyping
+    body: Validate chunking, embedding, and retrieval quality locally before committing to a managed vector DB or hosted model.

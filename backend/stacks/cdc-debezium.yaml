@@ -1,0 +1,133 @@
+id: cdc-debezium
+name: "Scenario: CDC — Postgres → Kafka (Debezium)"
+category: Scenario
+emoji: 🔄
+difficulty: expert
+summary: Stream every row change from Postgres into Kafka in real time with Debezium — the backbone of modern data integration.
+tags: [cdc, debezium, kafka, postgres, kafka-connect, replication]
+prerequisites:
+  - Docker + Compose, ~3 GB RAM
+  - Builds on the Kafka concepts — read the Kafka recipe first
+
+blocks:
+  - type: md
+    body: |
+      ## The scenario
+      You have an operational Postgres and you want every INSERT/UPDATE/DELETE
+      to flow into Kafka the instant it happens — no nightly batch, no polling.
+      **Debezium** reads Postgres's write-ahead log and publishes change events.
+      From Kafka you can sink into a warehouse, search index, cache, or DQ stream.
+
+      This single compose runs Postgres (with logical replication on), Kafka, and
+      Kafka Connect with Debezium pre-installed.
+
+  - type: code
+    language: yaml
+    filename: docker-compose.cdc.yml
+    body: |
+      services:
+        postgres:
+          image: postgres:16
+          command: ["postgres", "-c", "wal_level=logical"]
+          ports: ["5450:5432"]
+          environment:
+            POSTGRES_USER: app
+            POSTGRES_PASSWORD: app
+            POSTGRES_DB: shop
+
+        kafka:
+          image: bitnami/kafka:3.7
+          ports: ["29092:29092"]
+          environment:
+            - KAFKA_CFG_NODE_ID=0
+            - KAFKA_CFG_PROCESS_ROLES=controller,broker
+            - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+            - KAFKA_CFG_LISTENERS=INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+            - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+            - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+            - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+            - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+            - ALLOW_PLAINTEXT_LISTENER=yes
+
+        connect:
+          image: debezium/connect:2.7
+          ports: ["8083:8083"]
+          depends_on: [kafka, postgres]
+          environment:
+            BOOTSTRAP_SERVERS: kafka:9092
+            GROUP_ID: cdc
+            CONFIG_STORAGE_TOPIC: connect_configs
+            OFFSET_STORAGE_TOPIC: connect_offsets
+            STATUS_STORAGE_TOPIC: connect_statuses
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.cdc.yml up -d
+      # wait until Connect is ready
+      until curl -s localhost:8083/ >/dev/null; do sleep 2; done
+
+  - type: md
+    body: |
+      ## Seed a table
+  - type: code
+    language: bash
+    body: |
+      docker exec -i $(docker compose -f docker-compose.cdc.yml ps -q postgres) \
+        psql -U app -d shop -c "
+          CREATE TABLE customers (id serial primary key, name text, tier text);
+          INSERT INTO customers (name, tier) VALUES ('Alice','gold'),('Bob','silver');"
+
+  - type: md
+    body: |
+      ## Register the Debezium connector
+  - type: code
+    language: bash
+    body: |
+      curl -X POST localhost:8083/connectors -H 'Content-Type: application/json' -d '{
+        "name": "shop-cdc",
+        "config": {
+          "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+          "database.hostname": "postgres",
+          "database.port": "5432",
+          "database.user": "app",
+          "database.password": "app",
+          "database.dbname": "shop",
+          "topic.prefix": "shop",
+          "plugin.name": "pgoutput",
+          "table.include.list": "public.customers"
+        }
+      }'
+
+  - type: md
+    body: |
+      ## Watch changes stream in
+      Changes land on topic `shop.public.customers`. Open a consumer, then mutate
+      the table and watch events appear.
+  - type: code
+    language: bash
+    body: |
+      # consumer (leave running)
+      docker exec -it $(docker compose -f docker-compose.cdc.yml ps -q kafka) \
+        kafka-console-consumer.sh --topic shop.public.customers \
+        --from-beginning --bootstrap-server kafka:9092
+
+      # in another terminal — make a change
+      docker exec -i $(docker compose -f docker-compose.cdc.yml ps -q postgres) \
+        psql -U app -d shop -c "UPDATE customers SET tier='platinum' WHERE name='Alice';"
+      # → a change event with before/after appears in the consumer
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.cdc.yml down -v
+
+use_cases:
+  - title: Real-time warehouse sync
+    body: Keep Snowflake/BigQuery continuously in sync with operational Postgres instead of nightly dumps.
+  - title: Cache / search invalidation
+    body: Drive Redis or Elasticsearch updates off the change stream so reads never go stale.
+  - title: Event-carried state transfer
+    body: Other microservices subscribe to entity changes rather than calling your DB — clean decoupling.
+  - title: Audit & time travel
+    body: The full before/after history of every row becomes a durable, replayable Kafka log.

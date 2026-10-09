@@ -1,0 +1,238 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   AIDA design tokens — clean enterprise, light + dark.
+   Colors are stored as space-separated RGB channels so Tailwind's `/<alpha>`
+   opacity modifiers work everywhere (see tailwind.config.ts).
+   ========================================================================== */
+:root {
+  /* surfaces */
+  --bg: 247 248 250;
+  --surface: 255 255 255;
+  --surface-2: 246 248 251;
+  --surface-3: 238 242 247;
+  --border: 226 232 240;
+  --border-strong: 203 213 225;
+  /* text */
+  --text: 15 23 42;
+  /* Both were a step lighter (slate-600 / slate-500). They cleared the WCAG AA
+     ratio on paper and still read as washed-out grey on white in a bright
+     office, which is where this is actually used — so each drops one step.
+     Muted is now 10.4:1 on white, subtle 7.6:1. */
+  --text-muted: 51 65 85; /* slate-700 */
+  --text-subtle: 71 85 105; /* slate-600 */
+  /* brand */
+  --accent: 13 148 136; /* teal-600 */
+  --accent-hover: 15 118 110; /* teal-700 */
+  --accent-fg: 255 255 255;
+  --accent-text: 15 118 110;
+  --iris: 79 70 229; /* indigo-600 — secondary for data-viz/gamification */
+  /* status — Okabe-Ito-inspired, color-blind safe: bluish green vs vermillion
+     stays distinguishable for deutan/protan (unlike pure green vs red). */
+  --good: 0 158 115; /* #009E73 bluish green */
+  --bad: 213 94 0; /* #D55E00 vermillion */
+  --warn: 202 138 4; /* amber-600 — separated from bad by lightness+saturation */
+  --info: 2 132 199;
+  /* misc */
+  /* Chart series — six hues that stay distinguishable side by side and read
+     on both grounds. Separate from the accent so a chart never implies that
+     one series is "the brand one". */
+  --chart-1: 13 148 136;
+  --chart-2: 79 70 229;
+  --chart-3: 202 138 4;
+  --chart-4: 2 132 199;
+  --chart-5: 190 24 93;
+  --chart-6: 5 150 105;
+  --label: 100 116 139;
+  --shadow: 15 23 42;
+  --ring: var(--accent);
+  color-scheme: light;
+}
+
+.dark {
+  --bg: 9 12 17;
+  --surface: 20 26 35;
+  --surface-2: 28 35 47;
+  --surface-3: 38 47 61;
+  --border: 35 44 57;
+  --border-strong: 54 66 83;
+  --text: 233 239 246;
+  --text-muted: 156 170 189;
+  --text-subtle: 124 140 162; /* lifted for contrast on dark surfaces */
+  --accent: 20 184 166; /* teal-500 reads brighter on dark */
+  --accent-hover: 45 212 191; /* teal-400 */
+  --accent-fg: 4 16 15;
+  --accent-text: 45 212 191; /* teal-300/400 for links/icons */
+  --iris: 129 140 248; /* indigo-400 */
+  /* status — color-blind safe pair (bluish green / vermillion) tuned for dark */
+  --good: 52 211 153; /* emerald-400, bluish green */
+  --bad: 244 116 75; /* vermillion, light */
+  --warn: 234 179 8; /* yellow — separated from bad by hue+lightness */
+  --info: 56 189 248;
+  --chart-1: 45 212 191;
+  --chart-2: 129 140 248;
+  --chart-3: 250 204 21;
+  --chart-4: 56 189 248;
+  --chart-5: 244 114 182;
+  --chart-6: 52 211 153;
+  --label: 124 140 162;
+  --shadow: 0 0 0;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: rgb(var(--border));
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-bg text-text antialiased;
+    font-feature-settings: "cv05", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.22);
+    color: rgb(var(--text));
+  }
+  /* refined headings */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-semibold tracking-[-0.02em] text-text;
+  }
+  /* tabular figures for data/metrics */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  /* slim, themed scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--border-strong)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--border-strong));
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--text-subtle));
+    background-clip: content-box;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--ring) / 0.6);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* ---- Surfaces ---------------------------------------------------------- */
+  .card {
+    @apply rounded-xl border border-border bg-surface p-5 shadow-sm;
+  }
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md;
+  }
+  .surface-2 {
+    @apply bg-surface-2;
+  }
+  .panel {
+    @apply rounded-2xl border border-border bg-surface shadow-sm;
+  }
+
+  /* ---- Buttons ----------------------------------------------------------- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg shadow-xs transition-all duration-150 hover:bg-accent-hover hover:shadow-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text-muted transition-all duration-150 hover:border-border-strong hover:bg-surface-2 hover:text-text active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-soft {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent/10 px-3.5 py-2 text-sm font-medium text-accent-text transition-all duration-150 hover:bg-accent/15 active:scale-[0.98];
+  }
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs;
+  }
+  .btn-icon {
+    @apply grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:bg-surface-2 hover:text-text;
+  }
+
+  /* ---- Inputs ------------------------------------------------------------ */
+  .input,
+  .select,
+  .textarea {
+    @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text shadow-xs outline-none transition placeholder:text-text-subtle focus:border-accent focus:ring-2 focus:ring-accent/25;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-text-muted;
+  }
+
+  /* ---- Badges / chips ---------------------------------------------------- */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium text-text-muted;
+  }
+  .kbd {
+    @apply inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded border border-border bg-surface-2 px-1.5 font-mono text-[10px] font-medium text-text-muted shadow-xs;
+  }
+
+  /* ---- Misc -------------------------------------------------------------- */
+  .divider {
+    @apply h-px w-full bg-border;
+  }
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-surface-2;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--text-subtle) / 0.08),
+      transparent
+    );
+    animation: shimmer 1.5s infinite;
+  }
+  .link {
+    @apply font-medium text-accent-text underline-offset-2 hover:underline;
+  }
+  /* gradient brand text */
+  .text-gradient {
+    @apply bg-accent-sheen bg-clip-text text-transparent;
+  }
+  /* section eyebrow label */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-text-subtle;
+  }
+}
+
+/* status badge helpers (used across pages) */
+.badge-good {
+  background: rgb(var(--good) / 0.14);
+  color: rgb(var(--good));
+}
+.badge-bad {
+  background: rgb(var(--bad) / 0.14);
+  color: rgb(var(--bad));
+}
+.badge-warn {
+  background: rgb(var(--warn) / 0.16);
+  color: rgb(var(--warn));
+}
+.badge-accent {
+  background: rgb(var(--accent) / 0.14);
+  color: rgb(var(--accent-text));
+}

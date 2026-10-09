@@ -1,0 +1,80 @@
+from fastapi import APIRouter
+
+from app.api.routes import (
+    admin,
+    ai,
+    analytics,
+    approvals,
+    assets,
+    assignments,
+    account,
+    auth,
+    certifications,
+    challenges,
+    compliance,
+    coursera_analytics,
+    goals,
+    governance,
+    history,
+    recommendations,
+    reports,
+    courses,
+    events,
+    feed,
+    formations,
+    labs,
+    learning,
+    learners,
+    notifications,
+    onboarding,
+    pathways,
+    features,
+    search,
+    sessions,
+    skill_growth,
+    sharing,
+    skills,
+    social,
+    stacks,
+    teams,
+)
+
+api_router = APIRouter()
+api_router.include_router(ai.router)
+api_router.include_router(reports.router)
+api_router.include_router(coursera_analytics.router)
+api_router.include_router(goals.router)
+api_router.include_router(search.router)
+api_router.include_router(features.router)
+api_router.include_router(assignments.router)
+api_router.include_router(compliance.router)
+api_router.include_router(history.router)
+api_router.include_router(recommendations.router)
+api_router.include_router(governance.router)
+# Learning platform
+api_router.include_router(labs.router)
+api_router.include_router(learners.router)
+api_router.include_router(stacks.router)
+api_router.include_router(assets.router)
+api_router.include_router(courses.router)
+api_router.include_router(formations.router)
+api_router.include_router(events.router)
+api_router.include_router(sessions.router)
+api_router.include_router(teams.router)
+api_router.include_router(notifications.router)
+api_router.include_router(social.router)
+api_router.include_router(analytics.router)
+api_router.include_router(skills.router)
+api_router.include_router(skill_growth.router)
+api_router.include_router(learning.router)
+api_router.include_router(approvals.router)
+api_router.include_router(pathways.router)
+api_router.include_router(feed.router)
+api_router.include_router(onboarding.router)
+api_router.include_router(certifications.router)
+api_router.include_router(challenges.router)
+api_router.include_router(sharing.router)
+# Auth + management
+api_router.include_router(auth.router)
+api_router.include_router(account.router)
+api_router.include_router(admin.router)

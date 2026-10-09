@@ -1,0 +1,87 @@
+id: qdrant
+name: Qdrant (vector database)
+category: AI / ML
+emoji: 🎯
+difficulty: intermediate
+summary: A purpose-built vector database with a REST/gRPC API and a slick web UI — fast similarity search at scale.
+tags: [qdrant, vector-db, embeddings, ann, rag]
+prerequisites:
+  - Docker
+  - "Reach for this over pgvector when vectors are your primary workload"
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      Qdrant with its dashboard at http://localhost:6333/dashboard. Dedicated
+      vector stores like Qdrant shine when you have lots of vectors, need rich
+      payload filtering, or want features like quantization and multitenancy.
+
+  - type: code
+    language: yaml
+    filename: docker-compose.qdrant.yml
+    body: |
+      services:
+        qdrant:
+          image: qdrant/qdrant
+          ports:
+            - "6333:6333"   # REST + dashboard
+            - "6334:6334"   # gRPC
+          volumes: ["qdrant:/qdrant/storage"]
+      volumes:
+        qdrant:
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.qdrant.yml up -d
+      # dashboard: http://localhost:6333/dashboard
+
+  - type: md
+    body: |
+      ## Create a collection, add points, search (REST)
+  - type: code
+    language: bash
+    body: |
+      # create a collection of 3-d vectors with cosine distance
+      curl -X PUT http://localhost:6333/collections/docs -H 'Content-Type: application/json' -d '{
+        "vectors": {"size": 3, "distance": "Cosine"}
+      }'
+
+      # upsert a couple points (vector + payload)
+      curl -X PUT http://localhost:6333/collections/docs/points -H 'Content-Type: application/json' -d '{
+        "points": [
+          {"id": 1, "vector": [0.1,0.2,0.9], "payload": {"title": "orders pipeline"}},
+          {"id": 2, "vector": [0.9,0.1,0.1], "payload": {"title": "churn model"}}
+        ]
+      }'
+
+      # search for nearest neighbors
+      curl -X POST http://localhost:6333/collections/docs/points/search -H 'Content-Type: application/json' -d '{
+        "vector": [0.15,0.15,0.85], "limit": 2, "with_payload": true
+      }'
+
+  - type: md
+    body: |
+      ## From Python
+  - type: code
+    language: python
+    body: |
+      # pip install qdrant-client
+      from qdrant_client import QdrantClient
+      from qdrant_client.models import Distance, VectorParams, PointStruct
+
+      q = QdrantClient(url="http://localhost:6333")
+      q.recreate_collection("docs", vectors_config=VectorParams(size=3, distance=Distance.COSINE))
+      q.upsert("docs", [PointStruct(id=1, vector=[0.1,0.2,0.9], payload={"title": "orders"})])
+      print(q.search("docs", query_vector=[0.15,0.15,0.85], limit=2))
+
+use_cases:
+  - title: Production semantic search
+    body: Power "search by meaning" over docs, tickets, or code at millions-of-vectors scale with low latency.
+  - title: RAG retrieval layer
+    body: The retrieval half of a RAG app — embed, store, and fetch the top-k chunks to feed an LLM (see the Local RAG scenario).
+  - title: Filtered similarity
+    body: Combine vector search with payload filters (user, language, recency) so results are both relevant and permitted.
+  - title: Deduplication & clustering
+    body: Group near-identical records or detect duplicates by nearest-neighbor distance thresholds.

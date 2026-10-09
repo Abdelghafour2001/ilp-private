@@ -1,0 +1,91 @@
+id: airflow
+name: Apache Airflow
+category: Orchestration
+emoji: 🪶
+difficulty: advanced
+summary: Local Airflow to author, schedule, and monitor DAGs — the backbone of most data platforms.
+tags: [airflow, orchestration, scheduling, dags, pipelines]
+prerequisites:
+  - Docker + Compose, ~4 GB RAM allocated to Docker
+  - The official compose runs Postgres + scheduler + webserver
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      A full local Airflow (webserver + scheduler + metadata DB) using the
+      official compose. UI at http://localhost:8080 (login `airflow` / `airflow`).
+      Drop Python DAG files in `./dags` and they appear automatically.
+
+  - type: md
+    body: |
+      ## Fetch the official compose + init
+  - type: code
+    language: bash
+    body: |
+      mkdir airflow && cd airflow
+      curl -LfO 'https://airflow.apache.org/docs/apache-airflow/stable/docker-compose.yaml'
+      mkdir -p dags logs plugins config
+      echo "AIRFLOW_UID=50000" > .env        # linux/mac; on Windows this default is fine
+
+      docker compose up airflow-init          # one-time DB migration + admin user
+      docker compose up -d                    # start the stack
+
+  - type: md
+    body: |
+      ## A first DAG
+      Save as `dags/hello_dq.py` — it shows up in the UI within ~30s.
+  - type: code
+    language: python
+    filename: dags/hello_dq.py
+    body: |
+      from __future__ import annotations
+      import pendulum
+      from airflow.models.dag import DAG
+      from airflow.operators.python import PythonOperator
+
+      def extract():
+          return [{"id": 1, "amount": 120.5}, {"id": 2, "amount": -5.0}]
+
+      def validate(ti):
+          rows = ti.xcom_pull(task_ids="extract")
+          bad = [r for r in rows if r["amount"] < 0]
+          if bad:
+              raise ValueError(f"{len(bad)} rows failed the amount>=0 check: {bad}")
+          print("all rows passed")
+
+      with DAG(
+          dag_id="hello_dq",
+          schedule="@daily",
+          start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
+          catchup=False,
+          tags=["demo", "data-quality"],
+      ):
+          e = PythonOperator(task_id="extract", python_callable=extract)
+          v = PythonOperator(task_id="validate", python_callable=validate)
+          e >> v
+
+  - type: md
+    body: |
+      ## Trigger & inspect
+  - type: code
+    language: bash
+    body: |
+      # trigger from the CLI (or click ▶ in the UI)
+      docker compose run --rm airflow-cli dags trigger hello_dq
+      docker compose run --rm airflow-cli dags list-runs -d hello_dq
+
+  - type: code
+    language: bash
+    body: |
+      docker compose down -v
+
+use_cases:
+  - title: Daily ELT pipelines
+    body: Schedule extract → load → dbt run → dbt test, with retries, alerting, and backfills. Airflow handles dependencies and SLAs.
+  - title: Data-quality gates between stages
+    body: Make a validation task a hard dependency — downstream loads only run if checks pass, otherwise the DAG fails loudly and pages on-call.
+  - title: Cross-system orchestration
+    body: Coordinate Spark jobs, Kafka connectors, warehouse loads, and ML training as one observable workflow.
+  - title: Backfills with catchup
+    body: Re-run a date-partitioned pipeline across a historical window after a fix, with per-interval idempotency.

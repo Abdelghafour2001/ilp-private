@@ -1,0 +1,80 @@
+id: mlflow
+name: MLflow (experiment tracking)
+category: AI / ML
+emoji: 📒
+difficulty: intermediate
+summary: Track experiments, params, metrics, and models so your ML work is reproducible — not a pile of notebooks.
+tags: [mlflow, mlops, experiments, tracking, model-registry]
+prerequisites:
+  - Docker or Python 3.9+
+  - "UI on port 5000"
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      An MLflow tracking server + UI at http://localhost:5000. Every training run
+      logs its parameters, metrics, and artifacts so you can compare runs, pick
+      the best, and register models for deployment.
+
+  - type: code
+    language: yaml
+    filename: docker-compose.mlflow.yml
+    body: |
+      services:
+        mlflow:
+          image: ghcr.io/mlflow/mlflow:latest
+          ports: ["5000:5000"]
+          command: >
+            mlflow server --host 0.0.0.0 --port 5000
+            --backend-store-uri sqlite:////mlflow/mlflow.db
+            --default-artifact-root /mlflow/artifacts
+          volumes: ["mlflow:/mlflow"]
+      volumes:
+        mlflow:
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.mlflow.yml up -d
+      # UI: http://localhost:5000
+
+  - type: md
+    body: |
+      ## Log a run
+  - type: code
+    language: python
+    body: |
+      # pip install mlflow scikit-learn
+      import mlflow
+      from sklearn.linear_model import LogisticRegression
+      from sklearn.datasets import make_classification
+      from sklearn.metrics import accuracy_score
+
+      mlflow.set_tracking_uri("http://localhost:5000")
+      mlflow.set_experiment("demo")
+
+      X, y = make_classification(n_samples=500, random_state=0)
+      with mlflow.start_run():
+          C = 0.5
+          model = LogisticRegression(C=C).fit(X, y)
+          acc = accuracy_score(y, model.predict(X))
+          mlflow.log_param("C", C)
+          mlflow.log_metric("accuracy", acc)
+          mlflow.sklearn.log_model(model, "model")
+          print("logged run, accuracy =", acc)
+
+  - type: md
+    body: |
+      Refresh the UI — your run appears under the **demo** experiment with its
+      params, metrics, and the saved model artifact.
+
+use_cases:
+  - title: Reproducible experiments
+    body: Stop losing track of which hyperparameters produced which result — every run is logged and comparable side by side.
+  - title: Model registry & promotion
+    body: Register the winning model and move it through Staging → Production stages with versioning.
+  - title: Team collaboration
+    body: A shared tracking server gives everyone one place to see what's been tried and what works.
+  - title: Data/AI quality over time
+    body: Log evaluation metrics (accuracy, drift, eval scores) per run to catch regressions before they ship.

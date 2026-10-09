@@ -1,0 +1,138 @@
+services:
+  # Application metadata database
+  app-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: dqai
+      POSTGRES_PASSWORD: dqai
+      POSTGRES_DB: dqai
+    ports:
+      - "5433:5432"
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dqai"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Redis for Celery (scheduled / async runs — Phase 3)
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  # Catch-all SMTP server for local email testing — UI at http://localhost:8025.
+  # Mailpit rather than MailHog: it renders HTML mail properly, shows the
+  # plain-text alternative side by side, and has a spam/link checker. MailHog
+  # has been unmaintained since 2020 and shows most HTML as source.
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+
+  # FastAPI backend — runs migrations on boot, then serves with reload.
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://dqai:dqai@app-db:5432/dqai
+      REDIS_URL: redis://redis:6379/0
+      CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-10-21}
+      AI_MODEL: ${AI_MODEL:-claude-opus-4-8}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
+      COURSERA_MODE: ${COURSERA_MODE:-off}
+      COURSERA_CLIENT_ID: ${COURSERA_CLIENT_ID:-}
+      COURSERA_CLIENT_SECRET: ${COURSERA_CLIENT_SECRET:-}
+      COURSERA_ORG_ID: ${COURSERA_ORG_ID:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      PASSWORD_LOGIN: ${PASSWORD_LOGIN:-0}
+      APP_NAME: ${APP_NAME:-UpSkill}
+      AUTO_SEED: ${AUTO_SEED:-0}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      FRONTEND_ORIGIN: http://localhost:3000
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: UpSkill <upskill@upskill.local>
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # The image entrypoint reports dependencies, migrates and seeds; --reload is local-only.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    depends_on:
+      app-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - uploads:/app/uploads
+
+  # Celery worker — runs the scheduled jobs (renewal reminders, weekly digest).
+  worker:
+    build: ./backend
+    command: celery -A app.tasks worker --loglevel=info
+    environment: &worker_env
+      DATABASE_URL: postgresql+psycopg2://dqai:dqai@app-db:5432/dqai
+      # Only the backend migrates; workers just report their dependencies.
+      RUN_DB_MIGRATIONS_ON_START: "false"
+      REDIS_URL: redis://redis:6379/0
+      CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY}
+      FRONTEND_ORIGIN: http://localhost:3000
+      CERT_REMINDER_DAYS: ${CERT_REMINDER_DAYS:-60}
+      COURSERA_MODE: ${COURSERA_MODE:-off}
+      COURSERA_CLIENT_ID: ${COURSERA_CLIENT_ID:-}
+      COURSERA_CLIENT_SECRET: ${COURSERA_CLIENT_SECRET:-}
+      COURSERA_ORG_ID: ${COURSERA_ORG_ID:-}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: UpSkill <upskill@upskill.local>
+    depends_on:
+      app-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+
+  # Celery beat — the clock that fires those jobs on schedule.
+  beat:
+    build: ./backend
+    command: celery -A app.tasks beat --loglevel=info
+    environment: *worker_env
+    depends_on:
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+
+  # Next.js frontend — proxies /api to the backend service.
+  frontend:
+    # The Dockerfile's default target is the production image; locally use the dev server.
+    build:
+      context: ./frontend
+      target: dev
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  app_db_data:
+  uploads:

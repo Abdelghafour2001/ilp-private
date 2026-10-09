@@ -1,0 +1,87 @@
+id: pgvector
+name: pgvector (vectors in Postgres)
+category: AI / ML
+emoji: 🧮
+difficulty: intermediate
+summary: Add vector similarity search to plain Postgres — embeddings, ANN indexes, and SQL you already know.
+tags: [pgvector, postgres, embeddings, vector-search, rag]
+prerequisites:
+  - Docker
+  - "Often the simplest vector store — it's just Postgres"
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      Postgres with the `vector` extension. If your data already lives in
+      Postgres, you may not need a separate vector DB at all — you get semantic
+      search next to your relational data, in one transaction, with familiar SQL.
+
+  - type: code
+    language: yaml
+    filename: docker-compose.pgvector.yml
+    body: |
+      services:
+        pgvector:
+          image: pgvector/pgvector:pg16
+          ports: ["5455:5432"]
+          environment:
+            POSTGRES_USER: vec
+            POSTGRES_PASSWORD: vec
+            POSTGRES_DB: vec
+          volumes: ["pgv:/var/lib/postgresql/data"]
+      volumes:
+        pgv:
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.pgvector.yml up -d
+      docker exec -it $(docker compose -f docker-compose.pgvector.yml ps -q pgvector) \
+        psql -U vec -d vec
+
+  - type: md
+    body: |
+      ## Create a table with embeddings and search it
+      (Using tiny 3-d vectors here so it's readable — real embeddings are 768/1536-d.)
+  - type: code
+    language: sql
+    body: |
+      CREATE EXTENSION IF NOT EXISTS vector;
+
+      CREATE TABLE docs (id serial primary key, body text, embedding vector(3));
+      INSERT INTO docs (body, embedding) VALUES
+        ('orders pipeline',      '[0.1, 0.2, 0.9]'),
+        ('customer churn model', '[0.9, 0.1, 0.1]'),
+        ('data quality checks',  '[0.2, 0.1, 0.8]');
+
+      -- nearest neighbors to a query vector (<=> = cosine distance)
+      SELECT body, embedding <=> '[0.15, 0.15, 0.85]' AS distance
+      FROM docs ORDER BY distance LIMIT 2;
+
+      -- an ANN index for scale (HNSW)
+      CREATE INDEX ON docs USING hnsw (embedding vector_cosine_ops);
+
+  - type: md
+    body: |
+      ## From Python (real embeddings via Ollama)
+  - type: code
+    language: python
+    body: |
+      # pip install psycopg ollama
+      import psycopg, ollama
+
+      def embed(text): return ollama.embeddings(model="nomic-embed-text", prompt=text)["embedding"]
+
+      conn = psycopg.connect("host=localhost port=5455 dbname=vec user=vec password=vec")
+      # store one doc, then query — see pgvector docs for the register_vector helper
+
+use_cases:
+  - title: RAG without new infrastructure
+    body: Keep documents, metadata, and embeddings in the same Postgres you already run; retrieve context for an LLM with a single SQL query.
+  - title: Hybrid search
+    body: Combine vector similarity with normal WHERE filters (tenant, date, category) in one query — hard to do cleanly with a separate vector store.
+  - title: Recommendations & dedup
+    body: Find similar products, near-duplicate records, or related tickets by nearest-neighbor over embeddings.
+  - title: Semantic data catalog
+    body: Embed table/column descriptions so engineers can search the warehouse by meaning, not exact names.

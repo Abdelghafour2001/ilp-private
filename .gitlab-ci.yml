@@ -1,0 +1,185 @@
+stages:
+  - dependency-check
+  - build
+  - image-scan
+  - update-helm-values
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+-uat$/'
+      variables:
+        IMAGE_TAG: "$CI_COMMIT_TAG"
+        deploy_env: "uat"
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+-prod$/'
+      variables:
+        STRIP_PROD_SUFFIX: "true"
+        deploy_env: "prod"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      variables:
+        IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+        deploy_env: "dev"
+
+before_script:
+  - |
+    if [ "$STRIP_PROD_SUFFIX" = "true" ]; then
+      export IMAGE_TAG="${CI_COMMIT_TAG%-prod}"
+    fi
+
+variables:
+  GIT_STRATEGY: clone
+  TRIVY_CACHE_DIR: ".trivycache"
+  REGISTRY: "harbor.teal.ma"
+  GITOPS_REPO: "https://oauth2:${GITOPS_TOKEN}@git.teal.ma/ai-factory/internal-learning-platform/ilp-devops.git"
+  GITOPS_BRANCH: "main"
+
+
+cache:
+  key: "$CI_PROJECT_NAME-trivy-db"
+  paths:
+    - .trivycache/
+  policy: pull-push
+
+dependency-check:
+  stage: dependency-check
+  tags:
+    - k8s-runner
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  allow_failure: true
+  script:
+    - trivy fs --download-db-only
+    - trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL .
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+-(uat|prod)$/'
+
+# ------------------------
+# BUILD STAGE
+# ------------------------
+build-ilp-backend:
+  stage: build
+  tags:
+    - k8s-runner
+  image: $REGISTRY/devops/ci-tools:latest
+  services:
+    - name: docker:24.0.5-dind
+      command:
+        - "--tls=false"
+        - "--insecure-registry=harbor.teal.ma"
+        - "--mtu=1350"
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  before_script:
+    - echo "$REGISTRY_PASSWORD" | docker login $REGISTRY -u $REGISTRY_USER --password-stdin
+  script:
+    - cd ./backend
+    - docker build -t $REGISTRY/internal-learning-platform/ilp-backend:$IMAGE_TAG .
+    - docker push $REGISTRY/internal-learning-platform/ilp-backend:$IMAGE_TAG
+    - mkdir -p changed-images
+    - echo "ilp-backend ilp-worker ilp-beat" >> changed-images/ilp-backend.txt
+  artifacts:
+    paths:
+      - changed-images/ilp-backend.txt
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+-(uat|prod)$/'
+
+scan-ilp-backend:
+  stage: image-scan
+  tags:
+    - k8s-runner
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  needs:
+    - build-ilp-backend
+  variables:
+    TRIVY_USERNAME: "$REGISTRY_USER"
+    TRIVY_PASSWORD: "$REGISTRY_PASSWORD"
+  script:
+    - trivy image --download-db-only
+    - trivy image --severity HIGH,CRITICAL  $REGISTRY/internal-learning-platform/ilp-backend:$IMAGE_TAG
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+-(uat|prod)$/'
+
+build-ilp-frontend:
+  stage: build
+  tags:
+    - k8s-runner
+  image: $REGISTRY/devops/ci-tools:latest
+  services:
+    - name: docker:24.0.5-dind
+      command:
+        - "--tls=false"
+        - "--insecure-registry=harbor.teal.ma"
+        - "--mtu=1350"
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  before_script:
+    - echo "$REGISTRY_PASSWORD" | docker login $REGISTRY -u $REGISTRY_USER --password-stdin
+  script:
+    - cd ./frontend
+    - docker build -t $REGISTRY/internal-learning-platform/ilp-frontend:$IMAGE_TAG .
+    - docker push $REGISTRY/internal-learning-platform/ilp-frontend:$IMAGE_TAG
+    - cd ../..
+    - mkdir -p changed-images
+    - echo "ilp-frontend" >> changed-images/ilp-frontend.txt
+  artifacts:
+    paths:
+      - changed-images/ilp-frontend.txt
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+-(uat|prod)$/'
+
+
+scan-ilp-frontend:
+  stage: image-scan
+  tags:
+    - k8s-runner
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  needs:
+    - build-ilp-frontend
+  variables:
+    TRIVY_USERNAME: "$REGISTRY_USER"
+    TRIVY_PASSWORD: "$REGISTRY_PASSWORD"
+
+  script:
+    - trivy image --download-db-only
+    - trivy image --severity HIGH,CRITICAL  $REGISTRY/internal-learning-platform/ilp-frontend:$IMAGE_TAG
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+-(uat|prod)$/'
+
+update-helm-values:
+  stage: update-helm-values
+  tags:
+    - k8s-runner
+  image: $REGISTRY/devops/ci-tools:latest
+  script:
+    - git clone --branch "$GITOPS_BRANCH" "$GITOPS_REPO"
+    - cd ilp-devops
+    - git config user.email "gitlab-ci@local"
+    - git config user.name "gitlab-ci"
+    - yq -i ".workloads[\"ilp-backend\"].image = \"$REGISTRY/internal-learning-platform/ilp-backend:$IMAGE_TAG\"" "environments/$deploy_env/workloads.yaml"
+    - yq -i ".workloads[\"ilp-worker\"].image = \"$REGISTRY/internal-learning-platform/ilp-backend:$IMAGE_TAG\"" "environments/$deploy_env/workloads.yaml"
+    - yq -i ".workloads[\"ilp-beat\"].image = \"$REGISTRY/internal-learning-platform/ilp-backend:$IMAGE_TAG\"" "environments/$deploy_env/workloads.yaml"
+    - yq -i ".workloads[\"ilp-frontend\"].image = \"$REGISTRY/internal-learning-platform/ilp-frontend:$IMAGE_TAG\"" "environments/$deploy_env/workloads.yaml"
+    - commit_message_image="Update images tag to ${CI_COMMIT_SHORT_SHA}"
+    - git diff
+    - git add . 
+    - git commit -m "$commit_message_image" 
+    - git push origin "$GITOPS_BRANCH"
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+-(uat|prod)$/'
+
+

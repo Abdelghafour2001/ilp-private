@@ -1,0 +1,101 @@
+id: neo4j
+name: Neo4j (Graph)
+category: Graph
+emoji: 🕸️
+difficulty: intermediate
+summary: A local graph database with the Browser UI. Model relationships, write Cypher, run graph algorithms.
+tags: [neo4j, graph, cypher, relationships]
+prerequisites:
+  - Docker
+  - ~1.5 GB RAM
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      Neo4j with the **Neo4j Browser** at http://localhost:7474 (bolt on 7687).
+      Graphs shine where joins hurt: fraud rings, recommendations, network/
+      lineage analysis, anything with deep many-to-many relationships.
+
+  - type: code
+    language: yaml
+    filename: docker-compose.neo4j.yml
+    body: |
+      services:
+        neo4j:
+          image: neo4j:5
+          ports:
+            - "7474:7474"   # HTTP / Browser UI
+            - "7687:7687"   # Bolt
+          environment:
+            - NEO4J_AUTH=neo4j/testpassword
+            - NEO4J_PLUGINS=["apoc","graph-data-science"]
+          volumes:
+            - neo4j_data:/data
+
+      volumes:
+        neo4j_data:
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.neo4j.yml up -d
+      # Browser: http://localhost:7474  (user: neo4j / pass: testpassword)
+
+  - type: md
+    body: |
+      ## Load a graph (Cypher)
+      Paste into the Browser, or pipe via cypher-shell.
+  - type: code
+    language: cypher
+    body: |
+      // people who transact with each other
+      CREATE (a:Person {name:'Alice'}),
+             (b:Person {name:'Bob'}),
+             (c:Person {name:'Carol'}),
+             (a)-[:PAID {amount: 500}]->(b),
+             (b)-[:PAID {amount: 500}]->(c),
+             (c)-[:PAID {amount: 500}]->(a);   // a suspicious cycle
+
+      // find money-movement cycles of length 3 (classic fraud signal)
+      MATCH p = (x:Person)-[:PAID]->()-[:PAID]->()-[:PAID]->(x)
+      RETURN p;
+
+  - type: code
+    language: bash
+    body: |
+      # run Cypher from the host
+      docker exec -it neo4j cypher-shell -u neo4j -p testpassword \
+        "MATCH (n) RETURN count(n) AS nodes;"
+
+  - type: md
+    body: |
+      ## From Python
+  - type: code
+    language: python
+    body: |
+      # pip install neo4j
+      from neo4j import GraphDatabase
+
+      driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "testpassword"))
+      with driver.session() as s:
+          rows = s.run("MATCH (p:Person)-[:PAID]->(q) RETURN p.name, q.name")
+          for r in rows:
+              print(r[0], "->", r[1])
+      driver.close()
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.neo4j.yml down -v
+
+use_cases:
+  - title: Fraud-ring detection
+    body: Detect cyclic money movement and shared-attribute clusters (same device/IP/address across "unrelated" accounts) that are invisible in relational joins.
+  - title: Recommendations
+    body: |
+      "Customers who bought X also bought Y" and collaborative filtering as graph traversals instead of giant self-joins.
+  - title: Data lineage & impact analysis
+    body: Model tables/columns/jobs as a graph; answer "if this source breaks, what dashboards go down?" in one query.
+  - title: Identity resolution
+    body: Merge duplicate customer records by walking edges of matching emails, phones, and addresses.

@@ -1,0 +1,78 @@
+id: ai-foundations
+title: AI Engineering Foundations
+track: AI Engineering
+difficulty: beginner
+summary: Core concepts every engineer shipping LLM features should know — embeddings, RAG, evaluation.
+tags: [ai, llm, rag, embeddings, concepts]
+dataset:
+  schema: public
+  table: customers
+
+steps:
+  - id: concept
+    type: concept
+    title: The LLM app toolkit
+    xp: 0
+    body_md: |
+      Shipping AI features is mostly engineering: get the right context to the
+      model, measure whether the output is good, and keep it grounded in your
+      data. A few ideas you'll lean on constantly:
+
+      - **Embeddings** turn text into vectors so you can compare meaning, not just keywords.
+      - **RAG** (retrieval-augmented generation) feeds the model relevant snippets so it answers from *your* data instead of guessing.
+      - **Vector databases** (Qdrant, pgvector) store embeddings and find the nearest ones fast.
+      - **Evaluation** is how you know a change actually helped.
+
+      Try the **Stacks → AI / ML** recipes to run these locally for real.
+
+  - id: ground-llm
+    type: challenge
+    title: Grounding an LLM
+    xp: 25
+    body_md: |
+      Which technique grounds an LLM in your own documents to reduce hallucination?
+    builder:
+      mode: choice
+      options: [Fine-tuning, RAG, Quantization, Prompt caching]
+    grader: { type: choice, answer: RAG }
+
+  - id: what-embedding
+    type: challenge
+    title: What's an embedding?
+    xp: 25
+    body_md: |
+      An embedding is best described as…
+    builder:
+      mode: choice
+      options:
+        - A vector of numbers capturing meaning
+        - A compressed image
+        - A database index
+        - A prompt template
+    grader: { type: choice, answer: A vector of numbers capturing meaning }
+
+  - id: similarity
+    type: challenge
+    title: Comparing vectors
+    xp: 25
+    body_md: |
+      To measure how similar two embeddings are, you typically use…
+    builder:
+      mode: choice
+      options: [cosine similarity, GROUP BY, a regex, a LEFT JOIN]
+    grader: { type: choice, answer: cosine similarity }
+
+  - id: vector-db
+    type: challenge
+    title: Why a vector database?
+    xp: 30
+    body_md: |
+      What does a vector database (Qdrant, pgvector) optimize for?
+    builder:
+      mode: choice
+      options:
+        - Nearest-neighbor search over embeddings
+        - ACID financial transactions
+        - Full-text keyword search only
+        - Message queuing
+    grader: { type: choice, answer: Nearest-neighbor search over embeddings }

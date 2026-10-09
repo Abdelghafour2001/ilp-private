@@ -1,0 +1,125 @@
+id: kafka
+name: Apache Kafka (KRaft)
+category: Streaming
+emoji: 🌊
+difficulty: intermediate
+summary: Single-node Kafka in KRaft mode (no ZooKeeper) with a web UI. Produce, consume, inspect topics.
+tags: [kafka, streaming, events, pub-sub]
+prerequisites:
+  - Docker + Docker Compose
+  - ~2 GB free RAM
+  - "Host clients connect on localhost:29092; in-cluster services use kafka:9092"
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      A modern single-broker Kafka (KRaft — ZooKeeper is gone) plus **Kafka UI**
+      at http://localhost:8080. Two listeners are configured so both host tools
+      and in-network containers can connect cleanly — the #1 thing people get
+      wrong with local Kafka.
+
+  - type: code
+    language: yaml
+    filename: docker-compose.kafka.yml
+    body: |
+      services:
+        kafka:
+          image: bitnami/kafka:3.7
+          ports:
+            - "29092:29092"          # host clients
+          environment:
+            - KAFKA_CFG_NODE_ID=0
+            - KAFKA_CFG_PROCESS_ROLES=controller,broker
+            - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+            - KAFKA_CFG_LISTENERS=INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+            - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+            - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+            - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+            - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+            - ALLOW_PLAINTEXT_LISTENER=yes
+          volumes:
+            - kafka_data:/bitnami/kafka
+
+        kafka-ui:
+          image: provectuslabs/kafka-ui:latest
+          ports:
+            - "8080:8080"
+          environment:
+            - KAFKA_CLUSTERS_0_NAME=local
+            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+          depends_on:
+            - kafka
+
+      volumes:
+        kafka_data:
+
+  - type: md
+    body: |
+      ## Start it
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.kafka.yml up -d
+      # UI: http://localhost:8080
+
+  - type: md
+    body: |
+      ## Create a topic, produce, consume
+      Run the CLIs inside the broker container.
+  - type: code
+    language: bash
+    body: |
+      # create a topic with 3 partitions
+      docker exec -it kafka kafka-topics.sh --create \
+        --topic orders --partitions 3 --replication-factor 1 \
+        --bootstrap-server kafka:9092
+
+      docker exec -it kafka kafka-topics.sh --list --bootstrap-server kafka:9092
+
+      # produce (type lines, Ctrl-C to stop)
+      docker exec -it kafka kafka-console-producer.sh \
+        --topic orders --bootstrap-server kafka:9092
+
+      # consume from the beginning (separate terminal)
+      docker exec -it kafka kafka-console-consumer.sh \
+        --topic orders --from-beginning --bootstrap-server kafka:9092
+
+  - type: md
+    body: |
+      ## Connect from Python (host)
+  - type: code
+    language: python
+    body: |
+      # pip install confluent-kafka
+      from confluent_kafka import Producer, Consumer
+
+      p = Producer({"bootstrap.servers": "localhost:29092"})
+      p.produce("orders", key="o1", value='{"amount": 42}')
+      p.flush()
+
+      c = Consumer({"bootstrap.servers": "localhost:29092",
+                    "group.id": "demo", "auto.offset.reset": "earliest"})
+      c.subscribe(["orders"])
+      msg = c.poll(5.0)
+      print(msg.key(), msg.value())
+      c.close()
+
+  - type: md
+    body: |
+      ## Tear down
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.kafka.yml down -v   # -v wipes data
+
+use_cases:
+  - title: Change Data Capture (CDC)
+    body: |
+      Stream every INSERT/UPDATE/DELETE from Postgres into Kafka with Debezium, then fan out to a warehouse, search index, and cache — see the "CDC → Kafka" scenario.
+  - title: Event-driven microservices
+    body: Decouple services with topics. The order service publishes `orders`; billing, inventory, and notifications each consume independently with their own consumer groups and offsets.
+  - title: Real-time data-quality gates
+    body: Run validation on a stream and route bad events to a dead-letter topic instead of letting them poison downstream tables — the streaming analog of DQ-AI's batch checks.
+  - title: Log/metrics aggregation
+    body: Use Kafka as a durable buffer in front of Elasticsearch/ClickHouse so spikes don't drop data.

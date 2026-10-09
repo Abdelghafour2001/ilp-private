@@ -1,0 +1,20 @@
+# Serve the UI the way it ships: built once, served by `next start`.
+#
+# The dev server recompiles a route the first time it is opened and again on
+# every change, which is what makes the demo feel slow — the page is being
+# built while somebody waits for it. This override swaps in the production
+# target: no bind mounts, no rebuild per request.
+#
+#   podman-compose -f docker-compose.yml -f compose.ui-prod.yml up -d frontend
+#
+# The trade is the obvious one: the image holds a snapshot of the code, so a
+# frontend change needs a rebuild (`--build`) before it shows up. Drop the
+# override to go back to hot reload.
+services:
+  frontend:
+    build:
+      context: ./frontend
+      target: runner
+    # Nothing is mounted over the built app — a bind mount of ./frontend would
+    # shadow .next and put the container back on the source tree.
+    volumes: []

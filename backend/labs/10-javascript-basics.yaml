@@ -1,0 +1,58 @@
+id: javascript-basics
+title: JavaScript Basics (live)
+track: Programming
+difficulty: beginner
+summary: Write and run JavaScript in your browser, graded against hidden tests.
+tags: [javascript, coding, programming]
+dataset:
+  schema: public
+  table: customers
+
+steps:
+  - id: intro
+    type: concept
+    title: Run JS instantly
+    body_md: |
+      These exercises execute your JavaScript right in the page and check it
+      against hidden tests. Implement the function, hit **Run tests**.
+
+  - id: sum
+    type: exercise
+    title: Sum an array
+    xp: 25
+    body_md: |
+      Implement `total(nums)` returning the sum of all numbers in the array.
+    builder:
+      mode: code
+      language: javascript
+      starter_code: |
+        function total(nums) {
+          // your code here
+        }
+      test_code: |
+        if (total([1, 2, 3]) !== 6) throw new Error("total([1,2,3]) should be 6");
+        if (total([]) !== 0) throw new Error("total([]) should be 0");
+        if (total([10, -4]) !== 6) throw new Error("total([10,-4]) should be 6");
+    grader:
+      type: code
+
+  - id: unique
+    type: challenge
+    title: Deduplicate
+    xp: 35
+    body_md: |
+      Implement `unique(arr)` returning a new array with duplicates removed,
+      keeping first-seen order.
+    builder:
+      mode: code
+      language: javascript
+      starter_code: |
+        function unique(arr) {
+          // your code here
+        }
+      test_code: |
+        const r = unique([1, 1, 2, 3, 3, 3, 4]);
+        if (JSON.stringify(r) !== JSON.stringify([1, 2, 3, 4])) throw new Error("wrong result: " + JSON.stringify(r));
+        if (JSON.stringify(unique([])) !== "[]") throw new Error("empty should stay empty");
+    grader:
+      type: code

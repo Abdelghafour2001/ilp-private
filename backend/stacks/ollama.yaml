@@ -1,0 +1,88 @@
+id: ollama
+name: Ollama (local LLMs)
+category: AI / ML
+emoji: 🦙
+difficulty: intermediate
+summary: Run open LLMs and embedding models entirely on your machine — chat, generate, and embed via a simple HTTP API.
+tags: [ollama, llm, local, embeddings, inference]
+prerequisites:
+  - Docker (or the native installer from ollama.com)
+  - "A few GB of disk per model; a GPU helps but isn't required"
+
+blocks:
+  - type: md
+    body: |
+      ## What you get
+      A local LLM server with an OpenAI-ish HTTP API on port 11434. No keys, no
+      cloud, your data stays put. This is also the LLM backend AIDA itself can use
+      for its AI tutor — set `OLLAMA_MODEL` and leave the Anthropic key blank.
+
+  - type: code
+    language: yaml
+    filename: docker-compose.ollama.yml
+    body: |
+      services:
+        ollama:
+          image: ollama/ollama
+          ports: ["11434:11434"]
+          volumes: ["ollama:/root/.ollama"]
+          # For NVIDIA GPUs, uncomment:
+          # deploy: { resources: { reservations: { devices: [{ capabilities: ["gpu"] }] } } }
+      volumes:
+        ollama:
+
+  - type: code
+    language: bash
+    body: |
+      docker compose -f docker-compose.ollama.yml up -d
+
+      # pull a chat model and an embedding model
+      docker exec -it ollama ollama pull llama3.1
+      docker exec -it ollama ollama pull nomic-embed-text
+
+  - type: md
+    body: |
+      ## Chat / generate
+  - type: code
+    language: bash
+    body: |
+      curl http://localhost:11434/api/chat -d '{
+        "model": "llama3.1",
+        "stream": false,
+        "messages": [{"role": "user", "content": "Explain a data contract in one sentence."}]
+      }'
+
+  - type: md
+    body: |
+      ## Embeddings
+  - type: code
+    language: bash
+    body: |
+      curl http://localhost:11434/api/embeddings -d '{
+        "model": "nomic-embed-text",
+        "prompt": "orders with negative amounts are invalid"
+      }'
+
+  - type: md
+    body: |
+      ## From Python
+  - type: code
+    language: python
+    body: |
+      # pip install ollama
+      import ollama
+      print(ollama.chat(model="llama3.1",
+            messages=[{"role": "user", "content": "Give me 3 data-quality checks for an orders table."}])["message"]["content"])
+
+      vec = ollama.embeddings(model="nomic-embed-text", prompt="hello world")["embedding"]
+      print(len(vec), "dims")
+
+use_cases:
+  - title: Private / offline AI features
+    body: Power chatbots, summarizers, and classifiers without sending data to a third party — ideal for regulated or air-gapped environments.
+  - title: Cheap experimentation
+    body: Iterate on prompts and RAG pipelines locally at zero marginal cost before deciding what (if anything) needs a frontier model.
+  - title: Embeddings for search
+    body: Generate vectors with nomic-embed-text and store them in pgvector or Qdrant for semantic search over your docs.
+  - title: Local LLM-as-judge
+    body: Run cheap automated evaluations of model outputs in CI without per-call API costs.
