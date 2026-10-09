@@ -78,7 +78,7 @@ export default function GoalsPanel({ learnerId }: { learnerId: number }) {
     <section className="card space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="font-semibold">🎯 {t("goals.title")}</h2>
+          <h2 className="font-semibold">{t("goals.title")}</h2>
           <p className="text-sm text-text-muted">{t("goals.lede")}</p>
         </div>
         <button className="btn-ghost btn-sm" onClick={() => setAdding((v) => !v)}>
@@ -105,7 +105,7 @@ export default function GoalsPanel({ learnerId }: { learnerId: number }) {
             />
           </div>
           <div>
-            <p className="mb-1 text-xs uppercase tracking-wide text-text-subtle">
+            <p className="mb-1 text-xs font-medium text-text-subtle">
               {t("goals.pickSkills")}
             </p>
             <div className="flex flex-wrap gap-2">

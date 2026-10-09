@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import Icon from "@/components/Icon";
 import { api, type SkillTrack } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 const DIFF: Record<string, string> = {
   beginner: "badge-good",
@@ -13,6 +14,8 @@ const DIFF: Record<string, string> = {
 
 /** The skill tree: tracks as columns of lab nodes, with completion progress. */
 export default function SkillTree({ learnerId }: { learnerId?: number }) {
+  // `t` is the track in the loops below, so the translator gets another name.
+  const tr = useT();
   const [tracks, setTracks] = useState<SkillTrack[] | null>(null);
 
   useEffect(() => {
@@ -41,7 +44,7 @@ export default function SkillTree({ learnerId }: { learnerId?: number }) {
               <h3 className="font-semibold">{t.track}</h3>
               {t.done ? (
                 <span className="badge badge-good">
-                  <Icon name="check" size={12} /> Mastered
+                  <Icon name="check" size={12} /> {tr("skill.mastered")}
                 </span>
               ) : (
                 <span className="font-mono text-xs tnum text-text-subtle">{t.pct}%</span>
@@ -54,7 +57,7 @@ export default function SkillTree({ learnerId }: { learnerId?: number }) {
               />
             </div>
             <p className="mt-2 text-xs text-text-subtle">
-              {t.completed_steps}/{t.total_steps} steps · {t.earned_xp}/{t.total_xp} XP
+              {tr("skill.stepsXp", { done: t.completed_steps, total: t.total_steps, xp: t.earned_xp, totalXp: t.total_xp })}
             </p>
           </div>
 
@@ -89,7 +92,7 @@ export default function SkillTree({ learnerId }: { learnerId?: number }) {
                     </span>
                   </span>
                   <span className={`badge ${DIFF[lab.difficulty] ?? "badge-accent"} shrink-0`}>
-                    {lab.difficulty.slice(0, 3)}
+                    {tr(`common.${lab.difficulty}`, lab.difficulty)}
                   </span>
                 </Link>
               );
