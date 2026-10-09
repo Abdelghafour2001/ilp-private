@@ -248,6 +248,12 @@ Everything lives in `components/form/`; use it instead of bare inputs.
 - Multi-step builders (course, training) use the same pieces plus step pills in
   the header; a step can't be skipped while the one before it is blocked.
 
+### Steppers (pathways, lesson outlines)
+A vertical line joining numbered circles: done = filled `good` with a check,
+current/next = accent ring, locked = `lock` icon on `surface-2` with the reason
+in `text-subtle` (never orange: locked is a state, not an error). The next
+actionable step also gets a "Next up" callout linking straight to it.
+
 ### Lesson players
 Outline as a stepper on the left (done / current / to do), a reading column
 capped at ~70ch with 15px body text, a slim progress bar in the header,

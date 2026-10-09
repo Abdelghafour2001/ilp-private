@@ -41,6 +41,7 @@ export default function CreateLayout({
   busyLabel,
   busy,
   onSubmit,
+  notice,
   children,
 }: {
   back: { href: string; label: string };
@@ -53,6 +54,8 @@ export default function CreateLayout({
   busyLabel: string;
   busy: boolean;
   onSubmit: () => void;
+  /** Shown above the form: an edit-only note such as a reviewer's rejection. */
+  notice?: ReactNode;
   children: ReactNode;
 }) {
   const t = useT();
@@ -77,6 +80,7 @@ export default function CreateLayout({
 
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0">
+          {notice && <div className="mb-4">{notice}</div>}
           <div className="panel p-6 sm:p-7">{children}</div>
 
           {error && (

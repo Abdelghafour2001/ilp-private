@@ -17,6 +17,10 @@ import AssignPanel from "@/components/AssignPanel";
 import Modal from "@/components/Modal";
 import { getStoredLearner } from "@/lib/learner";
 import { useFormat, useT } from "@/lib/i18n";
+import Icon, { type IconName } from "@/components/Icon";
+import Field from "@/components/form/Field";
+
+const STEP_ICON: Record<string, IconName> = { formation: "formations", course: "courses", certification: "award" };
 
 interface DraftStep {
   entity_type: string;
@@ -85,12 +89,6 @@ export default function PathwaysPage() {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (!assignTo) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAssignTo(null);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [assignTo]);
 
   useEffect(() => {
     if (!creating) return;
@@ -195,20 +193,40 @@ export default function PathwaysPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{t("pathways.title")}</h1>
-          <p className="mt-1 text-sm text-text-muted">{t("pathways.subtitle")}</p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">{t("pathways.title")}</h1>
+          <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-text-muted">{t("pathways.subtitle")}</p>
         </div>
-        {canCreate && (
-          <button className="btn" onClick={() => (creating ? resetForm() : setCreating(true))}>
-            {creating ? t("common.close") : `+ ${t("pathways.new")}`}
-          </button>
-        )}
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {owed.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setOnlyOwed((v) => !v)}
+              aria-pressed={onlyOwed}
+              className={`badge ${onlyOwed ? "bg-bad text-white" : "bg-bad/15 text-bad hover:bg-bad/25"}`}
+            >
+              ! {t("catalog.onlyMandatory", { n: owed.size })}
+            </button>
+          )}
+          {canCreate && (
+            <button type="button" className="btn" onClick={() => setCreating(true)}>
+              <Icon name="plus" size={16} /> {t("pathways.new")}
+            </button>
+          )}
+        </div>
+      </header>
 
-      {error && <div className="card border-bad/40 text-sm text-bad">{error}</div>}
-      {notice && <div className="card border-good/40 text-sm text-good">{notice}</div>}
+      {error && (
+        <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-text-muted">
+          <Icon name="check" size={15} className="text-good" /> {notice}
+        </p>
+      )}
 
       {/* Building a pathway is a dialog, not a card wedged above the list: it
           used to push every existing pathway off the screen while open, and
@@ -250,9 +268,20 @@ export default function PathwaysPage() {
           }
         >
         {builderStep === 0 && (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input className="input" placeholder={t("pathways.titlePlaceholder")} value={title} onChange={(e) => setTitle(e.target.value)} />
-            <input className="input" placeholder={t("pathways.summaryPlaceholder")} value={summary} onChange={(e) => setSummary(e.target.value)} />
+          <div className="space-y-4">
+            <Field id="pw-title" label={t("pw.f.title")} count={title.length} max={70}>
+              <input id="pw-title" className="input py-2.5 text-base font-medium" autoComplete="off" autoFocus placeholder={t("pathways.titlePlaceholder")} value={title} onChange={(e) => setTitle(e.target.value)} />
+            </Field>
+            <Field id="pw-summary" label={t("pw.f.summary")} optional count={summary.length} max={160}>
+              <input id="pw-summary" className="input" autoComplete="off" placeholder={t("pw.f.summaryPh")} value={summary} onChange={(e) => setSummary(e.target.value)} />
+            </Field>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 transition-colors hover:border-border-strong">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[rgb(var(--accent))]" checked={mandatory} onChange={(e) => setMandatory(e.target.checked)} />
+              <span>
+                <span className="block text-sm font-medium">{t("pathways.mandatoryToggle")}</span>
+                <span className="block text-xs text-text-subtle">{t("pathways.mandatoryHint")}</span>
+              </span>
+            </label>
           </div>
         )}
         {builderStep === 1 && (
@@ -260,11 +289,12 @@ export default function PathwaysPage() {
           <div className="flex flex-wrap items-center gap-2">
             <input
               className="input max-w-[12rem]"
+              aria-label={t("pathways.findStep")}
               placeholder={t("pathways.findStep")}
               value={stepFind}
               onChange={(e) => setStepFind(e.target.value)}
             />
-            <select className="input max-w-sm" value={pick} onChange={(e) => setPick(e.target.value)}>
+            <select className="input max-w-sm" aria-label={t("pathways.addStep")} value={pick} onChange={(e) => setPick(e.target.value)}>
               <option value="">{t("pathways.addStep")}</option>
               <optgroup label={t("nav.formations")}>
                 {matching(trainings, (f) => f.title).map((f) => (
@@ -287,26 +317,21 @@ export default function PathwaysPage() {
               </optgroup>
               <optgroup label={t("nav.certifications")}>
                 {matching(certs, (c) => c.name).map((c) => (
-                  <option key={`x${c.id}`} value={`certification:${c.id}`}>🎖️ {c.name}</option>
+                  <option key={`x${c.id}`} value={`certification:${c.id}`}>{c.name}</option>
                 ))}
               </optgroup>
             </select>
-            <button className="btn-soft btn-sm" disabled={!pick} onClick={addStep}>{t("pathways.addStepButton")}</button>
-            <label className="flex items-center gap-1.5 text-xs text-text-muted">
-              <input
-                type="checkbox"
-                checked={mandatory}
-                onChange={(e) => setMandatory(e.target.checked)}
-              />
-              {t("pathways.mandatoryToggle")}
-            </label>
+            <button type="button" className="btn-soft" disabled={!pick} onClick={addStep}>
+              <Icon name="plus" size={14} /> {t("pathways.addStepButton")}
+            </button>
           </div>
           {steps.length > 0 && (
-            <ol className="space-y-1">
+            <ol className="divide-y divide-border rounded-xl border border-border">
               {steps.map((s, i) => (
-                <li key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm">
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent-text">{i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                <li key={i} className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-sm">
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-accent/10 text-xs font-semibold text-accent-text tnum">{i + 1}</span>
+                  <Icon name={STEP_ICON[s.entity_type] ?? "file"} size={14} className="text-text-subtle" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{s.label}</span>
                   <label
                     className="flex items-center gap-1 text-xs text-text-muted"
                     title={t("pathways.stepRequiredHint")}
@@ -329,7 +354,14 @@ export default function PathwaysPage() {
                     />
                     {t("pathways.stepMilestone")}
                   </label>
-                  <button className="text-xs text-bad hover:underline" onClick={() => setSteps(steps.filter((_, k) => k !== i))}>{t("common.remove")}</button>
+                  <button
+                    type="button"
+                    className="grid h-7 w-7 place-items-center rounded-md text-text-subtle hover:bg-bad/10 hover:text-bad"
+                    aria-label={`${t("common.remove")} — ${s.label}`}
+                    onClick={() => setSteps(steps.filter((_, k) => k !== i))}
+                  >
+                    <Icon name="trash" size={14} />
+                  </button>
                 </li>
               ))}
             </ol>
@@ -339,250 +371,228 @@ export default function PathwaysPage() {
         </Modal>
       )}
 
-      {owed.size > 0 && (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setOnlyOwed((v) => !v)}
-            className={`badge ${
-              onlyOwed ? "bg-bad text-white" : "bg-bad/15 text-bad hover:bg-bad/25"
-            }`}
-          >
-            ! {t("catalog.onlyMandatory", { n: owed.size })}
-          </button>
-        </div>
-      )}
 
       {/* pathway cards — what this person owes leads, soonest deadline first */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {mandatoryFirst(pathways, owed, onlyOwed).map((p) => (
-          // The anchor /pathways/<id> redirects to, and what a notification
-          // link ultimately opens. scroll-mt keeps it clear of the header.
-          <div
-            key={p.id}
-            id={`pathway-${p.id}`}
-            className={`card scroll-mt-24 space-y-3 ${
-              owed.has(p.id) ? "border-bad/60 ring-1 ring-bad/30" : ""
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-start gap-3">
-                <span className="text-3xl">{p.emoji}</span>
-                <div>
-                  <p className="flex flex-wrap items-center gap-2 font-semibold">
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        {mandatoryFirst(pathways, owed, onlyOwed).map((p) => {
+          // The next thing to do: the first required step not done and not
+          // locked. It earns a callout so the reader never hunts for it.
+          const next = p.enrolled && !p.complete ? p.steps.find((s) => !s.done && !s.locked) : undefined;
+          const r = 20;
+          const c = 2 * Math.PI * r;
+          return (
+            <article
+              key={p.id}
+              id={`pathway-${p.id}`}
+              className={`panel scroll-mt-24 overflow-hidden ${owed.has(p.id) ? "border-bad/60 ring-1 ring-bad/30" : ""}`}
+            >
+              <header className="flex items-start gap-4 p-5">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-border bg-surface-2 text-2xl" aria-hidden="true">
+                  {p.emoji}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="flex flex-wrap items-center gap-2 text-base font-semibold leading-snug">
                     {p.title}
                     {owed.get(p.id) && <OwedMarker owed={owed.get(p.id)!} />}
-                    <span
-                      className={`badge ${p.mandatory ? "bg-warn/15 text-warn" : "bg-edge text-text-subtle"}`}
-                      title={
-                        p.mandatory
-                          ? t("pathways.mandatoryHint")
-                          : t("pathways.optionalHint")
-                      }
-                    >
-                      {p.mandatory ? t("pathways.mandatory") : t("pathways.optional")}
+                    {p.mandatory && (
+                      <span className="badge badge-warn" title={t("pathways.mandatoryHint")}>
+                        {t("pathways.mandatory")}
+                      </span>
+                    )}
+                  </h2>
+                  <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-text-subtle">
+                    <span>{t("common.by")} {p.created_by_name}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="tnum">{t("pathways.enrolled", { count: p.enrolled_count })}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="tnum">
+                      {p.optional_count > 0
+                        ? t("pathways.countsWithOptional", { required: p.required_count, optional: p.optional_count })
+                        : t("pathways.counts", { required: p.required_count })}
                     </span>
-                  </p>
-                  <p className="text-xs text-text-subtle">
-                    {t("common.by")} {p.created_by_name} ·{" "}
-                    {t("pathways.enrolled", { count: p.enrolled_count })} ·{" "}
-                    {p.optional_count > 0
-                      ? t("pathways.countsWithOptional", {
-                          required: p.required_count,
-                          optional: p.optional_count,
-                        })
-                      : t("pathways.counts", { required: p.required_count })}
                     {p.due_date && (
-                      <span className="ml-1 text-warn">
-                        {" · "}
-                        {t("pathways.due", {
-                          date: fmt.date(p.due_date, { day: "numeric", month: "short" }),
-                        })}
+                      <span className="text-warn">
+                        · {t("pathways.due", { date: fmt.date(p.due_date, { day: "numeric", month: "short" }) })}
                       </span>
                     )}
                   </p>
+                  {p.summary && <p className="mt-2 text-sm leading-relaxed text-text-muted">{p.summary}</p>}
                 </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {canCreate && (
-                  <button
-                    className="btn-ghost btn-sm"
-                    onClick={() => startEdit(p)}
-                    title={t("pathways.edit")}
+                {p.enrolled ? (
+                  // Progress counts only the required spine, so optional
+                  // extras can't make a mandatory pathway read as finished.
+                  <div
+                    className="relative grid h-12 w-12 shrink-0 place-items-center"
+                    role="img"
+                    aria-label={t("pathways.progress", { done: p.required_done, total: p.required_count })}
+                    title={t("pathways.progress", { done: p.required_done, total: p.required_count })}
                   >
-                    {t("pathways.edit")}
+                    <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90">
+                      <circle cx="24" cy="24" r={r} fill="none" strokeWidth="4" className="stroke-surface-3" />
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r={r}
+                        fill="none"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        className={p.complete ? "stroke-good" : "stroke-accent"}
+                        strokeDasharray={c}
+                        strokeDashoffset={c - (c * p.percent) / 100}
+                      />
+                    </svg>
+                    {p.complete ? (
+                      <Icon name="check" size={16} strokeWidth={3} className="text-good" />
+                    ) : (
+                      <span className="text-[11px] font-semibold tnum">{p.percent}%</span>
+                    )}
+                  </div>
+                ) : (
+                  <button type="button" className="btn-soft btn-sm shrink-0" onClick={() => join(p)}>
+                    <Icon name="plus" size={14} /> {t("pathways.join")}
                   </button>
                 )}
-                {p.enrolled ? (
-                  <span className="badge badge-accent">{p.percent}%</span>
-                ) : (
-                  <button className="btn-soft btn-sm" onClick={() => join(p)}>{t("pathways.join")}</button>
-                )}
-              </div>
-            </div>
-            {p.summary && <p className="text-sm text-text-muted">{p.summary}</p>}
+              </header>
 
-            {p.enrolled && (
-              <div className="space-y-1">
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-                  <div
-                    className={`h-full rounded-full ${p.complete ? "bg-good" : "bg-accent"}`}
-                    style={{ width: `${Math.max(2, p.percent)}%` }}
-                  />
-                </div>
-                {/* Progress counts only the required spine, so optional extras
-                    can't make a mandatory pathway read as finished. */}
-                <p className="text-[11px] text-text-subtle">
-                  {t("pathways.progress", {
-                    done: p.required_done,
-                    total: p.required_count,
-                  })}
-                  {p.locked_by && (
-                    <span className="ml-1 text-warn">
-                      {" · "}
-                      {t("pathways.blockedBy", { title: p.locked_by })}
-                    </span>
-                  )}
-                </p>
-              </div>
-            )}
+              {next && (
+                <Link
+                  href={next.link}
+                  target={next.link.startsWith("http") ? "_blank" : undefined}
+                  className="group mx-5 mb-4 flex items-center gap-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 transition-colors hover:border-accent"
+                >
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-accent-fg">
+                    <Icon name={STEP_ICON[next.entity_type] ?? "file"} size={15} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs text-accent-text">{t("pw.nextUp")}</span>
+                    <span className="block truncate text-sm font-semibold">{next.title}</span>
+                  </span>
+                  <Icon name="arrow-right" size={16} className="text-accent-text transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              )}
 
-            <ol className="space-y-1.5">
-              {p.steps.map((s, i) => {
-                const body = (
-                  <>
-                    <span
-                      className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${
-                        s.done ? "bg-good/20 text-good" : "bg-surface-2 text-text-subtle"
-                      }`}
-                    >
-                      {s.done ? "✓" : s.locked ? "🔒" : i + 1}
-                    </span>
-                    <span className="text-lg">{s.emoji}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate font-medium">{s.title}</span>
-                        {s.milestone && (
-                          <span
-                            className="badge bg-accent/15 text-accent-text"
-                            title={t("pathways.milestoneBadgeHint")}
-                          >
-                            {t("pathways.milestone")}
-                          </span>
+              <ol className="px-5 pb-4">
+                {p.steps.map((s, i) => {
+                  const last = i === p.steps.length - 1;
+                  const circle = s.done
+                    ? "border-good bg-good text-white"
+                    : s.locked
+                      ? "border-border bg-surface-2 text-text-subtle"
+                      : "border-border-strong bg-surface text-text-muted";
+                  const body = (
+                    <>
+                      <span className={`relative z-[1] mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 text-[11px] font-semibold tnum ${circle}`}>
+                        {s.done ? <Icon name="check" size={12} strokeWidth={3} /> : s.locked ? <Icon name="lock" size={11} /> : i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 py-1">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className={`font-medium ${s.locked ? "text-text-subtle" : "text-text"}`}>{s.title}</span>
+                          {s.milestone && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-accent-text" title={t("pathways.milestoneBadgeHint")}>
+                              <Icon name="challenges" size={11} /> {t("pathways.milestone")}
+                            </span>
+                          )}
+                          {!s.required && (
+                            <span className="text-[11px] text-text-subtle" title={t("pathways.optionalBadgeHint")}>
+                              {t("common.optional")}
+                            </span>
+                          )}
+                        </span>
+                        {s.locked ? (
+                          <span className="mt-0.5 block text-xs text-text-subtle">{t("pathways.locked", { title: s.locked_by })}</span>
+                        ) : (
+                          s.note && <span className="mt-0.5 block text-xs text-text-subtle">{s.note}</span>
                         )}
-                        {!s.required && (
-                          <span
-                            className="badge bg-edge text-text-subtle"
-                            title={t("pathways.optionalBadgeHint")}
-                          >
-                            {t("common.optional")}
+                        {/* How far into this step they are, only where there is
+                            something real to measure: a bar at 0 under every
+                            untouched step is noise rather than information. */}
+                        {s.percent !== null && s.percent > 0 && !s.done && (
+                          <span className="mt-1.5 flex items-center gap-2">
+                            <span className="h-1 w-28 overflow-hidden rounded-full bg-surface-3">
+                              <span className="block h-full origin-left rounded-full bg-accent" style={{ transform: `scaleX(${Math.max(0.03, s.percent / 100)})` }} />
+                            </span>
+                            <span className="text-[11px] text-text-subtle tnum">{s.percent}%</span>
                           </span>
                         )}
                       </span>
+                      <span className="mt-1.5 inline-flex shrink-0 items-center gap-1 text-xs text-text-subtle">
+                        <Icon name={STEP_ICON[s.entity_type] ?? "file"} size={12} />
+                        <span className="hidden sm:inline">{t(`pw.type.${s.entity_type}`, s.entity_type)}</span>
+                      </span>
+                    </>
+                  );
+                  return (
+                    <li key={s.id} className="relative">
+                      {!last && (
+                        <span
+                          className={`absolute left-[13px] top-9 h-[calc(100%-1.75rem)] w-0.5 ${s.done ? "bg-good/40" : "bg-border"}`}
+                          aria-hidden="true"
+                        />
+                      )}
+                      {/* A locked step renders as plain markup rather than a
+                          link: the gate should stop the click, not merely look
+                          like it does. */}
                       {s.locked ? (
-                        <span className="block truncate text-xs text-warn">
-                          {t("pathways.locked", { title: s.locked_by })}
-                        </span>
+                        <div aria-disabled className="flex cursor-not-allowed items-start gap-3 py-1.5">
+                          {body}
+                        </div>
                       ) : (
-                        s.note && (
-                          <span className="block truncate text-xs text-text-subtle">{s.note}</span>
-                        )
+                        <Link
+                          href={s.link}
+                          target={s.link.startsWith("http") ? "_blank" : undefined}
+                          className="group -mx-2 flex items-start gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-2"
+                        >
+                          {body}
+                        </Link>
                       )}
-                      {/* How far into this step they are. Only drawn where
-                          there is something real to draw: null means the step
-                          has nothing to measure, and a bar at 0 under every
-                          untouched step is noise rather than information. */}
-                      {s.percent !== null && s.percent > 0 && !s.done && (
-                        <span className="mt-1 flex items-center gap-1.5">
-                          <span className="h-1 w-24 overflow-hidden rounded-full bg-surface-2">
-                            <span
-                              className="block h-full rounded-full bg-accent"
-                              style={{ width: `${Math.max(3, s.percent)}%` }}
-                            />
-                          </span>
-                          <span className="text-[10px] tnum text-text-subtle">{s.percent}%</span>
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-[10px] uppercase text-text-subtle">
-                      {s.entity_type === "formation" ? "training" : s.entity_type}
-                    </span>
-                  </>
-                );
+                    </li>
+                  );
+                })}
+              </ol>
 
-                // A locked step renders as plain markup rather than a link: the
-                // gate should stop the click, not merely look like it does.
-                return (
-                  <li key={s.id}>
-                    {s.locked ? (
-                      <div
-                        aria-disabled
-                        className="flex cursor-not-allowed items-center gap-2.5 rounded-lg border border-dashed border-border px-3 py-2 text-sm opacity-60"
-                      >
-                        {body}
-                      </div>
-                    ) : (
-                      <Link
-                        href={s.link}
-                        target={s.link.startsWith("http") ? "_blank" : undefined}
-                        className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition hover:border-accent ${
-                          s.done ? "border-good/30 bg-good/5" : "border-border"
-                        }`}
-                      >
-                        {body}
-                      </Link>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-
-            {/* Assigning a pathway is the same job as assigning a course, so
-                it is the same form — named people or a team, mandatory or not,
-                with a deadline. The team buttons could only do one of those. */}
-            {canAssign && (
-              <div className="border-t border-border pt-2">
-                <button className="btn-ghost btn-sm" onClick={() => setAssignTo(p)}>
-                  📌 {t("pathways.assignTo")}
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
+              {(canCreate || canAssign) && (
+                <footer className="flex flex-wrap items-center gap-2 border-t border-border bg-surface-2/50 px-5 py-2.5">
+                  {canAssign && (
+                    <button type="button" className="btn-ghost btn-sm" onClick={() => setAssignTo(p)}>
+                      <Icon name="team" size={14} /> {t("pw.assign")}
+                    </button>
+                  )}
+                  {canCreate && (
+                    <button type="button" className="btn-ghost btn-sm" onClick={() => startEdit(p)}>
+                      <Icon name="pencil" size={13} /> {t("pathways.edit")}
+                    </button>
+                  )}
+                </footer>
+              )}
+            </article>
+          );
+        })}
       </div>
+
       {/* Assigning is a decision taken about a pathway, not part of reading one:
-          in a dialog it has the whole screen and the card below stays legible. */}
+          in a dialog it has the whole screen and the list behind stays legible. */}
       {assignTo && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-[8vh]"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setAssignTo(null)}
+        <Modal
+          title={t("pw.assignTitle", { title: assignTo.title })}
+          size="md"
+          onClose={() => setAssignTo(null)}
         >
-          <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between text-sm text-white">
-              <span className="font-medium">
-                {assignTo.emoji} {assignTo.title}
-              </span>
-              <button className="text-white/80 hover:text-white" onClick={() => setAssignTo(null)}>
-                ✕ {t("common.close")}
-              </button>
-            </div>
-            <AssignPanel
-              entityType="pathway"
-              entityId={assignTo.id}
-              onAssigned={() => {
-                refresh();
-                setAssignTo(null);
-              }}
-            />
-          </div>
-        </div>
+          <AssignPanel
+            entityType="pathway"
+            entityId={assignTo.id}
+            onAssigned={() => {
+              refresh();
+              setAssignTo(null);
+            }}
+          />
+        </Modal>
       )}
 
       {pathways.length === 0 && (
-        <p className="text-sm text-text-subtle">
-          {canCreate ? t("pathways.emptyCanCreate") : t("pathways.empty")}
-        </p>
+        <div className="rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
+          <Icon name="route" size={22} className="mx-auto text-text-subtle" />
+          <p className="mt-3 text-sm text-text-muted">{canCreate ? t("pw.emptyCanCreate") : t("pathways.empty")}</p>
+        </div>
       )}
     </div>
   );
