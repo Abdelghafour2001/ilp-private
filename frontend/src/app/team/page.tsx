@@ -6,14 +6,23 @@ import { api, type FormationCard, type Learner, type Team, type TeamDashboard } 
 import { getStoredLearner } from "@/lib/learner";
 import { useT } from "@/lib/i18n";
 import Modal from "@/components/Modal";
+import Icon from "@/components/Icon";
+import { useFormat } from "@/lib/i18n";
 
-function fmtDate(d: string | null) {
-  if (!d) return "never";
-  return new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+/** Days since a date, or null when there is none. */
+function daysSince(d: string | null) {
+  if (!d) return null;
+  return Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);
+}
+
+function initials(s: string) {
+  const parts = s.split(/[\s.]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
 export default function TeamPage() {
   const t = useT();
+  const fmt = useFormat();
   const [me, setMe] = useState<Learner | null>(null);
   const [teams, setTeams] = useState<Team[] | null>(null);
   const [teamId, setTeamId] = useState<number | null>(null);
@@ -31,6 +40,8 @@ export default function TeamPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [formations, setFormations] = useState<FormationCard[]>([]);
   const [assignId, setAssignId] = useState<string>("");
+  // Who the assign dialog is for: the whole team, or one member.
+  const [assigning, setAssigning] = useState<{ ids: number[]; label: string } | null>(null);
 
   const isAdmin = me?.role === "admin" || me?.role === "hr";
   const canManage = dash?.can_manage ?? false;
@@ -127,9 +138,9 @@ export default function TeamPage() {
     try {
       const res = await api.assignFormation(teamId, Number(assignId), memberIds, me?.id);
       const parts = [];
-      if (res.assigned.length) parts.push(`Assigned to ${res.assigned.join(", ")} ✓`);
+      if (res.assigned.length) parts.push(t("team.assignedTo", { who: res.assigned.join(", ") }));
       if (res.skipped.length) parts.push(res.skipped.map((s) => `${s.handle}: ${s.reason}`).join(" · "));
-      setNotice(parts.join(" — ") || `Nothing to do for ${label}.`);
+      setNotice(parts.join(" — ") || t("team.nothingToDo", { who: label }));
       loadDash();
     } catch (e) {
       setError(String(e));
@@ -139,56 +150,106 @@ export default function TeamPage() {
   }
 
   async function removeMember(memberId: number, handle: string) {
-    if (!teamId || !confirm(`Remove ${handle} from the team?`)) return;
+    if (!teamId || !confirm(t("team.confirmRemove", { who: handle }))) return;
     await api.removeTeamMember(teamId, memberId, me?.id ?? undefined).catch((e) => setError(String(e)));
     loadDash();
     loadTeams();
   }
 
-  if (teams === null && !error) return <p className="text-sm text-text-subtle">Loading…</p>;
+  if (teams === null && !error)
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <div className="h-9 w-64 skeleton" />
+        <div className="h-24 skeleton rounded-2xl" />
+        <div className="h-72 skeleton rounded-2xl" />
+      </div>
+    );
 
   const canSee =
     isAdmin || me?.role === "skill_lead" || me?.role === "manager" || (teams?.length ?? 0) > 0;
 
+  const members = dash?.members ?? [];
+  const activePct = dash && dash.totals.members ? Math.round((100 * dash.totals.active_this_week) / dash.totals.members) : 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{t("team.title")}</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Skill Leads and managers track their team&apos;s XP, streaks and formation progress here.
-          </p>
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="eyebrow mb-2">{t("team.title")}</p>
+          {dash ? (
+            <>
+              <h1 className="text-3xl font-semibold tracking-[-0.03em]">{dash.team.name}</h1>
+              <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-muted">
+                {dash.team.lead_handle && (
+                  <span>
+                    {t("team.skillLead")} <span className="font-medium text-text">{dash.team.lead_handle}</span>
+                  </span>
+                )}
+                {dash.team.manager_handle && (
+                  <span>
+                    {t("team.manager")} <span className="font-medium text-text">{dash.team.manager_handle}</span>
+                  </span>
+                )}
+                {!canManage && <span className="text-text-subtle">{t("team.readOnly")}</span>}
+              </p>
+            </>
+          ) : (
+            <h1 className="text-3xl font-semibold tracking-[-0.03em]">{t("team.title")}</h1>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-        {isAdmin && (
-          <button className="btn-soft" onClick={() => setCreatingTeam(true)}>
-            + {t("team.create")}
-          </button>
-        )}
-        {teams && teams.length > 1 && (
-          <select
-            className="input max-w-[220px]"
-            value={teamId ?? ""}
-            onChange={(e) => setTeamId(Number(e.target.value))}
-          >
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({t.member_count})
-              </option>
-            ))}
-          </select>
-        )}
+          {teams && teams.length > 1 && (
+            <select
+              className="input w-auto max-w-[240px]"
+              aria-label={t("team.switch")}
+              value={teamId ?? ""}
+              onChange={(e) => setTeamId(Number(e.target.value))}
+            >
+              {teams.map((tm) => (
+                <option key={tm.id} value={tm.id}>
+                  {tm.name} ({tm.member_count})
+                </option>
+              ))}
+            </select>
+          )}
+          {isAdmin && (
+            <button className="btn-ghost" onClick={() => setCreatingTeam(true)}>
+              <Icon name="plus" size={15} /> {t("team.create")}
+            </button>
+          )}
+          {dash && canManage && (
+            <>
+              <button className="btn-ghost" onClick={() => setAddingMembers(true)}>
+                <Icon name="team" size={15} /> {t("team.addMembers")}
+              </button>
+              <button className="btn" onClick={() => setAssigning({ ids: [], label: dash.team.name })}>
+                <Icon name="formations" size={15} /> {t("team.assignTraining")}
+              </button>
+            </>
+          )}
         </div>
+      </header>
+
+      <div aria-live="polite" className="space-y-3 empty:hidden">
+        {error && (
+          <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <div className="flex items-start gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-text-muted">
+            <Icon name="check" size={16} className="mt-0.5 shrink-0 text-good" />
+            <span className="flex-1">{notice}</span>
+            <button onClick={() => setNotice(null)} aria-label={t("common.close")} className="shrink-0 text-text-subtle hover:text-text">
+              <Icon name="x" size={15} />
+            </button>
+          </div>
+        )}
       </div>
 
-      {error && <div className="card border-bad/40 text-sm text-bad">{error}</div>}
-      {notice && <div className="card border-warn/40 text-sm text-warn">{notice}</div>}
-
       {!canSee && (
-        <div className="card text-center text-sm text-text-subtle">
-          {t("team.spaceFor")} <strong className="text-text">{t("team.skillLeads")}</strong> and{" "}
-          <strong className="text-text">managers</strong> — the people responsible for their
-          team&apos;s skills development. Ask an admin to appoint you on a team.
+        <div className="rounded-xl border border-dashed border-border-strong px-6 py-10 text-center text-sm text-text-muted">
+          {t("team.notForYou")}
         </div>
       )}
 
@@ -218,227 +279,295 @@ export default function TeamPage() {
             </>
           }
         >
-          <input className="input w-full" placeholder={t("team.name")} value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus />
-          <input className="input w-full" placeholder={t("team.leadHandle")} value={newLead} onChange={(e) => setNewLead(e.target.value)} />
-          <input className="input w-full" placeholder={t("team.managerHandle")} value={newManager} onChange={(e) => setNewManager(e.target.value)} />
+          <label className="block">
+            <span className="label">{t("team.name")}</span>
+            <input className="input" name="team-name" autoComplete="off" value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus />
+          </label>
+          <label className="block">
+            <span className="label">{t("team.leadHandle")}</span>
+            <input className="input" name="lead" autoComplete="off" spellCheck={false} value={newLead} onChange={(e) => setNewLead(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="label">{t("team.managerHandle")}</span>
+            <input className="input" name="manager" autoComplete="off" spellCheck={false} value={newManager} onChange={(e) => setNewManager(e.target.value)} />
+          </label>
+        </Modal>
+      )}
+
+      {addingMembers && (
+        <Modal
+          title={t("team.addMembers")}
+          lede={t("team.addByHandle")}
+          size="sm"
+          onClose={() => setAddingMembers(false)}
+          footer={
+            <>
+              <button className="btn-ghost" onClick={() => setAddingMembers(false)}>
+                {t("common.cancel")}
+              </button>
+              <button
+                className="btn"
+                disabled={busy || !addHandles.trim()}
+                onClick={async () => {
+                  await addMembers();
+                  setAddingMembers(false);
+                }}
+              >
+                {t("team.addMembers")}
+              </button>
+            </>
+          }
+        >
+          <label className="block">
+            <span className="sr-only">{t("team.addByHandle")}</span>
+            <input
+              className="input"
+              name="handles"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="prenom.nom, autre.personne…"
+              value={addHandles}
+              onChange={(e) => setAddHandles(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addMembers().then(() => setAddingMembers(false))}
+              autoFocus
+            />
+          </label>
+        </Modal>
+      )}
+
+      {/* One dialog for both: the whole team from the header, one person
+          from their row. It used to be a dropdown above the table that a
+          row's "assign" link silently depended on. */}
+      {assigning && (
+        <Modal
+          title={t("team.assignTraining")}
+          lede={
+            assigning.ids.length
+              ? t("team.assignToOne", { who: assigning.label })
+              : t("team.assignToTeam", { n: dash?.totals.members ?? 0 })
+          }
+          size="sm"
+          onClose={() => setAssigning(null)}
+          footer={
+            <>
+              <button className="btn-ghost" onClick={() => setAssigning(null)}>
+                {t("common.cancel")}
+              </button>
+              <button
+                className="btn"
+                disabled={busy || !assignId}
+                onClick={async () => {
+                  await assignTo(assigning.ids, assigning.label);
+                  setAssigning(null);
+                }}
+              >
+                {busy ? t("common.saving", "Saving…") : t("team.assignNotify")}
+              </button>
+            </>
+          }
+        >
+          <fieldset>
+            <legend className="label">{t("team.pickTraining")}</legend>
+            <div className="max-h-80 space-y-1 overflow-y-auto overscroll-contain">
+              {formations.map((f) => (
+                <label
+                  key={f.id}
+                  className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                    assignId === String(f.id) ? "border-accent bg-accent/5" : "border-border hover:bg-surface-2"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="training"
+                    value={f.id}
+                    checked={assignId === String(f.id)}
+                    onChange={() => setAssignId(String(f.id))}
+                    className="accent-[rgb(var(--accent))]"
+                  />
+                  <span aria-hidden="true">{f.emoji}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{f.title}</span>
+                  <span className="shrink-0 text-xs text-text-subtle tnum">{t("form.hub.lessons", { n: f.lesson_count })}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </Modal>
       )}
 
       {canSee && teams && teams.length === 0 && !isAdmin && (
-        <div className="card text-center text-sm text-text-subtle">
-          You don&apos;t lead any team yet — ask an admin to create one and appoint you.
+        <div className="rounded-xl border border-dashed border-border-strong px-6 py-10 text-center text-sm text-text-muted">
+          {t("team.noTeam")}
         </div>
       )}
 
       {dash && (
         <>
-          {/* Totals */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Members", value: dash.totals.members },
-              { label: "Team XP", value: dash.totals.total_xp.toLocaleString() },
-              { label: "Active this week", value: `${dash.totals.active_this_week}/${dash.totals.members}` },
-              { label: "Avg training progress", value: `${dash.totals.avg_formation_pct}%` },
-            ].map((s) => (
-              <div key={s.label} className="card">
-                <p className="text-xs uppercase tracking-wide text-text-subtle">{s.label}</p>
-                <p className="mt-1 text-2xl font-semibold text-accent">{s.value}</p>
+          {/* Totals: one strip, four facts about the same group of people. */}
+          <dl className="panel grid grid-cols-2 divide-border overflow-hidden lg:grid-cols-4 lg:divide-x [&>div:nth-child(n+3)]:border-t lg:[&>div:nth-child(n+3)]:border-t-0 [&>div:nth-child(even)]:border-l lg:[&>div:nth-child(even)]:border-l-0">
+            <div className="p-5">
+              <dt className="text-xs text-text-subtle">{t("team.stat.members")}</dt>
+              <dd className="mt-1 text-2xl font-semibold tracking-tight tnum">{dash.totals.members}</dd>
+            </div>
+            <div className="p-5">
+              <dt className="text-xs text-text-subtle">{t("team.stat.xp")}</dt>
+              <dd className="mt-1 text-2xl font-semibold tracking-tight tnum">{fmt.number(dash.totals.total_xp)}</dd>
+            </div>
+            <div className="p-5">
+              <dt className="text-xs text-text-subtle">{t("team.stat.active")}</dt>
+              <dd className="mt-1 flex items-baseline gap-1 text-2xl font-semibold tracking-tight tnum">
+                {dash.totals.active_this_week}
+                <span className="text-sm font-normal text-text-subtle">/ {dash.totals.members}</span>
+              </dd>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
+                <div className="h-full origin-left rounded-full bg-accent" style={{ transform: `scaleX(${activePct / 100})` }} />
               </div>
-            ))}
-          </div>
-
-          {/* Team header + member management (leads/admins only) */}
-          <div className="card space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
-              {dash.team.name}
-              {dash.team.lead_handle && (
-                <span className="ml-2 font-normal normal-case">
-                  · Skill Lead: <strong className="text-text">{dash.team.lead_handle}</strong>
-                </span>
-              )}
-              {dash.team.manager_handle && (
-                <span className="ml-2 font-normal normal-case">
-                  · Manager: <strong className="text-text">{dash.team.manager_handle}</strong>
-                </span>
-              )}
-            </p>
-            {canManage ? (
-              <>
-                <button className="btn-soft btn-sm w-fit" onClick={() => setAddingMembers(true)}>
-                  + {t("team.addMembers")}
-                </button>
-                {addingMembers && (
-                  <Modal
-                    title={t("team.addMembers")}
-                    lede={t("team.addByHandle")}
-                    size="sm"
-                    onClose={() => setAddingMembers(false)}
-                    footer={
-                      <>
-                        <button className="btn-ghost" onClick={() => setAddingMembers(false)}>
-                          {t("common.cancel")}
-                        </button>
-                        <button
-                          className="btn"
-                          disabled={busy || !addHandles.trim()}
-                          onClick={async () => {
-                            await addMembers();
-                            setAddingMembers(false);
-                          }}
-                        >
-                          {t("team.addMembers")}
-                        </button>
-                      </>
-                    }
-                  >
-                    <input
-                      className="input w-full"
-                      placeholder={t("team.addByHandle")}
-                      value={addHandles}
-                      onChange={(e) => setAddHandles(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && addMembers()}
-                      autoFocus
-                    />
-                  </Modal>
-                )}
-                <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-2">
-                  <span className="text-xs text-text-subtle">📚 Assign a training:</span>
-                  <select
-                    className="input max-w-[280px] py-1.5 text-sm"
-                    value={assignId}
-                    onChange={(e) => setAssignId(e.target.value)}
-                  >
-                    <option value="">{t("team.pickTraining")}</option>
-                    {formations.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.emoji} {f.title}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="btn-soft btn-sm"
-                    disabled={busy || !assignId}
-                    onClick={() => assignTo([], "the team")}
-                  >
-                    {t("team.assignAll")}
-                  </button>
-                  <span className="text-xs text-text-subtle">
-                    or use “assign” on a member&apos;s row
-                  </span>
-                </div>
-              </>
-            ) : (
-              <p className="text-xs text-text-subtle">
-                Read-only view — ask the team&apos;s Skill Lead or manager for changes.
-              </p>
-            )}
-          </div>
+            </div>
+            <div className="p-5">
+              <dt className="text-xs text-text-subtle">{t("team.stat.progress")}</dt>
+              <dd className="mt-1 text-2xl font-semibold tracking-tight tnum">{dash.totals.avg_formation_pct}%</dd>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
+                <div className="h-full origin-left rounded-full bg-accent" style={{ transform: `scaleX(${dash.totals.avg_formation_pct / 100})` }} />
+              </div>
+            </div>
+          </dl>
 
           {/* Members */}
-          <div className="card p-0">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-edge text-xs uppercase tracking-wide text-text-subtle">
-                <tr>
-                  <th className="px-4 py-3 font-medium">{t("team.col.member")}</th>
-                  <th className="px-4 py-3 font-medium">Level</th>
-                  <th className="px-4 py-3 text-right font-medium">XP</th>
-                  <th className="px-4 py-3 text-right font-medium">{t("team.col.streak")}</th>
-                  <th className="px-4 py-3 text-right font-medium">{t("team.col.badges")}</th>
-                  <th className="px-4 py-3 font-medium">{t("team.col.formations")}</th>
-                  <th className="px-4 py-3 text-right font-medium">{t("team.col.lastActive")}</th>
-                  {canManage && <th className="px-4 py-3 text-right font-medium" />}
-                </tr>
-              </thead>
-              <tbody>
-                {dash.members.map((m) => (
-                  <tr key={m.learner_id} className="border-t border-edge align-top">
-                    <td className="px-4 py-2.5">
-                      {/* The name opens that person's learning record — the
-                          manager's next question after reading this row. */}
-                      {m.email ? (
-                        <Link
-                          href={`/people/${encodeURIComponent(m.email)}`}
-                          className="block hover:text-accent"
-                        >
-                          <p className="font-medium">{m.handle}</p>
-                          {m.name && <p className="text-xs text-text-subtle">{m.name}</p>}
-                        </Link>
-                      ) : (
-                        <>
-                          <p className="font-medium">{m.handle}</p>
-                          {m.name && <p className="text-xs text-text-subtle">{m.name}</p>}
-                        </>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <span className="badge bg-edge text-text-subtle">
-                        Lv {m.level} · {m.level_title}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-accent">{m.xp}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      {m.current_streak > 0 ? `🔥 ${m.current_streak}` : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-text-muted">{m.badges}</td>
-                    <td className="px-4 py-2.5">
-                      {m.formations.length === 0 && (
-                        <span className="text-xs text-text-subtle">{t("team.notEnrolled")}</span>
-                      )}
-                      <div className="space-y-1">
-                        {m.formations.map((f) => (
-                          <Link
-                            key={f.id}
-                            href={`/formations/${f.id}`}
-                            className="flex items-center gap-2 text-xs hover:underline"
-                          >
-                            <span>{f.emoji}</span>
-                            <span className="max-w-[160px] truncate">{f.title}</span>
-                            <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
-                              <span
-                                className={`block h-full rounded-full ${f.percent === 100 ? "bg-good" : "bg-accent"}`}
-                                style={{ width: `${Math.max(2, f.percent)}%` }}
-                              />
-                            </span>
-                            <span className="text-text-subtle">{f.percent}%</span>
-                          </Link>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs text-text-subtle">
-                      {fmtDate(m.last_active_on)}
-                    </td>
+          <section>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-base font-semibold">{t("team.membersTitle")}</h2>
+              <span className="text-xs text-text-subtle">{t("team.inactiveHint")}</span>
+            </div>
+            <div className="panel relative overflow-x-auto">
+              <table className="w-full min-w-[820px] text-left text-sm">
+                <thead className="border-b border-border bg-surface-2/60 text-xs text-text-subtle">
+                  <tr>
+                    <th scope="col" className="px-5 py-2.5 font-medium">{t("team.col.member")}</th>
+                    <th scope="col" className="px-4 py-2.5 font-medium">{t("team.col.level")}</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">XP</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">{t("team.col.streak")}</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">{t("team.col.badges")}</th>
+                    <th scope="col" className="px-4 py-2.5 font-medium">{t("team.col.formations")}</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">{t("team.col.lastActive")}</th>
                     {canManage && (
-                      <td className="px-4 py-2.5 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <button
-                            className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline"
-                            disabled={busy || !assignId}
-                            title={assignId ? "Assign the selected training to this member" : "Pick a training above first"}
-                            onClick={() => assignTo([m.learner_id], m.handle)}
-                          >
-                            assign
-                          </button>
-                          <button
-                            className="text-xs text-bad hover:underline"
-                            onClick={() => removeMember(m.learner_id, m.handle)}
-                          >
-                            remove
-                          </button>
-                        </div>
-                      </td>
+                      <th scope="col" className="px-4 py-2.5">
+                        <span className="sr-only">{t("team.col.actions")}</span>
+                      </th>
                     )}
                   </tr>
-                ))}
-                {dash.members.length === 0 && (
-                  <tr>
-                    <td colSpan={canManage ? 8 : 7} className="px-4 py-6 text-center text-sm text-text-subtle">
-                      {t("team.noMembers")}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {members.map((m) => {
+                    const days = daysSince(m.last_active_on);
+                    const quiet = days === null || days > 7;
+                    const who = (
+                      <span className="flex items-center gap-3">
+                        <span
+                          aria-hidden="true"
+                          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-3 text-[11px] font-semibold text-text-muted"
+                        >
+                          {initials(m.name || m.handle)}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-text">{m.name || m.handle}</span>
+                          {m.name && <span className="block truncate text-xs text-text-subtle">{m.handle}</span>}
+                        </span>
+                      </span>
+                    );
+                    return (
+                      <tr key={m.learner_id} className="group align-middle transition-colors hover:bg-surface-2/50">
+                        <td className="px-5 py-3">
+                          {/* The name opens that person's learning record — the
+                              manager's next question after reading this row. */}
+                          {m.email ? (
+                            <Link href={`/people/${encodeURIComponent(m.email)}`} className="block rounded-lg hover:text-accent-text">
+                              {who}
+                            </Link>
+                          ) : (
+                            who
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-text-muted">
+                          <span className="font-medium text-text tnum">{m.level}</span>
+                          <span className="text-text-subtle"> · {m.level_title}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium tnum">{fmt.number(m.xp)}</td>
+                        <td className="px-4 py-3 text-right tnum">
+                          {m.current_streak > 0 ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon name="flame" size={13} className="text-warn" />
+                              {m.current_streak}
+                            </span>
+                          ) : (
+                            <span className="text-text-subtle">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right text-text-muted tnum">{m.badges}</td>
+                        <td className="px-4 py-3">
+                          {m.formations.length === 0 ? (
+                            <span className="text-xs text-text-subtle">{t("team.notEnrolled")}</span>
+                          ) : (
+                            <ul className="space-y-1.5">
+                              {m.formations.map((f) => (
+                                <li key={f.id}>
+                                  <Link href={`/formations/${f.id}`} className="flex items-center gap-2 text-xs hover:text-accent-text">
+                                    <span className="w-40 truncate">{f.title}</span>
+                                    <span
+                                      className="h-1 w-16 overflow-hidden rounded-full bg-surface-3"
+                                      role="progressbar"
+                                      aria-valuenow={f.percent}
+                                      aria-valuemin={0}
+                                      aria-valuemax={100}
+                                      aria-label={f.title}
+                                    >
+                                      <span
+                                        className={`block h-full origin-left rounded-full ${f.percent === 100 ? "bg-good" : "bg-accent"}`}
+                                        style={{ transform: `scaleX(${Math.max(0.03, f.percent / 100)})` }}
+                                      />
+                                    </span>
+                                    <span className="w-8 text-right text-text-subtle tnum">{f.percent}%</span>
+                                  </Link>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </td>
+                        <td className={`px-4 py-3 text-right text-xs tnum ${quiet ? "text-warn" : "text-text-subtle"}`}>
+                          {m.last_active_on ? fmt.date(m.last_active_on, { day: "numeric", month: "short" }) : t("team.never")}
+                        </td>
+                        {canManage && (
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                className="btn-ghost btn-sm"
+                                onClick={() => setAssigning({ ids: [m.learner_id], label: m.name || m.handle })}
+                              >
+                                {t("assign.short")}
+                              </button>
+                              <button
+                                className="btn-icon h-8 w-8 hover:border-bad/40 hover:text-bad"
+                                aria-label={t("team.removeWho", { who: m.handle })}
+                                title={t("team.removeWho", { who: m.handle })}
+                                onClick={() => removeMember(m.learner_id, m.handle)}
+                              >
+                                <Icon name="trash" size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {members.length === 0 && (
+                    <tr>
+                      <td colSpan={canManage ? 8 : 7} className="px-5 py-10 text-center text-sm text-text-subtle">
+                        {t("team.noMembers")}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       )}
     </div>

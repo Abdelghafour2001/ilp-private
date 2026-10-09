@@ -225,6 +225,17 @@ top strip and a small mark, never as a full-bleed brand block. Card meta reads
 - Errors inline, under the field, in `text-bad`, saying how to fix it. Focus
   the first invalid field on submit.
 
+### Tables
+- Header row: sentence case, `text-xs text-text-subtle`, `bg-surface-2/60`.
+- Numbers right-aligned with `.tnum`; never colour a number just to decorate it.
+- Wide tables scroll inside their panel: `panel relative overflow-x-auto` plus a
+  `min-w-[…]` on the `<table>`. The `relative` matters: without it a
+  `sr-only` child escapes the clip and the whole page scrolls sideways.
+- Row actions: a `btn-ghost btn-sm` for the main one, an icon button (with
+  `aria-label`) for destructive ones, which still confirm.
+- An action that needs a choice opens one Modal with the choice inside it. It
+  never depends on a control somewhere else on the page.
+
 ### Modal
 Use `components/Modal.tsx`, never a hand-rolled overlay. It portals to `<body>`,
 moves focus into the dialog and back to the opener on close, and closes on Esc
