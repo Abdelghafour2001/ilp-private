@@ -56,9 +56,10 @@ export default function CourseCover({
   const [failed, setFailed] = useState(false);
   const showImage = !!coverUrl && !failed;
   const brand = providerStyle(provider);
-  // Each artless course gets one of the chart hues, picked from its title so
-  // it is stable across renders and the grid doesn't read as one flat tint.
-  const hue = `var(--chart-${(hash(title || emoji) % 6) + 1})`;
+  // Each artless course gets one of the chart hues, picked from its emoji so
+  // the builder's live preview, the catalogue and the course page all agree,
+  // and the grid doesn't read as one flat tint.
+  const hue = `var(--chart-${(hash(emoji) % 6) + 1})`;
 
   return (
     <div className={`relative w-full overflow-hidden rounded-lg bg-surface-2 ${className}`}>

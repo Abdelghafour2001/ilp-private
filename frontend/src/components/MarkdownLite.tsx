@@ -41,6 +41,19 @@ const isTableRow = (line: string) => line.trim().startsWith("|") && line.include
 /** The |---|:--:|---| line. Without it a pipe in prose starts a phantom table. */
 const isTableDivider = (line: string) => /^\s*\|[\s:|-]+\|\s*$/.test(line) && line.includes("-");
 
+/** Whether a line opens a block of its own, so a paragraph must stop there. */
+function startsBlock(line: string, next: string | undefined) {
+  const t = line.trim();
+  return (
+    t.startsWith("```") ||
+    /^#{1,3} /.test(line) ||
+    line.startsWith("> ") ||
+    line.startsWith("- ") ||
+    /^\d+\.\s/.test(line) ||
+    (isTableRow(line) && isTableDivider(next ?? ""))
+  );
+}
+
 function splitRow(line: string): string[] {
   return line
     .trim()
@@ -167,12 +180,20 @@ export default function MarkdownLite({ children }: { children: string }) {
         </ul>,
       );
     } else {
+      // Consecutive plain lines are one paragraph, as in any markdown: authors
+      // hard-wrap their source, and a <p> per line breaks sentences in half
+      // with paragraph-sized gaps.
+      const para: string[] = [line.trim()];
+      i++;
+      while (i < lines.length && lines[i].trim() && !startsBlock(lines[i], lines[i + 1])) {
+        para.push(lines[i].trim());
+        i++;
+      }
       blocks.push(
         <p key={start} className="my-2 text-sm leading-relaxed text-text-muted">
-          {inline(line, `p${start}`)}
+          {inline(para.join(" "), `p${start}`)}
         </p>,
       );
-      i++;
     }
   }
 

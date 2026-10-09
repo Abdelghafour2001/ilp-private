@@ -122,9 +122,11 @@ export default function Modal({
 
         <div className="space-y-3">{children}</div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-edge pt-3">
-          {footer}
-        </div>
+        {footer && (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-edge pt-3">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,

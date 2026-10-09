@@ -15,6 +15,17 @@ import { getStoredLearner } from "@/lib/learner";
 import MarkdownLite from "@/components/MarkdownLite";
 import { F_LESSON_META, fmtDuration } from "@/lib/formationLessons";
 import { useT } from "@/lib/i18n";
+import Icon, { type IconName } from "@/components/Icon";
+
+const TYPE_ICON: Record<string, IconName> = {
+  article: "file",
+  video: "play",
+  lab: "labs",
+  quiz: "quiz",
+  prompt_playground: "sparkles",
+  prompt_challenge: "trophy",
+  external_course: "external",
+};
 
 function embedUrl(url: string): string | null {
   try {
@@ -34,7 +45,7 @@ type Flat = { lesson: FormationLesson; module: string; moduleIndex: number };
 
 export default function FormationPlayerPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <Suspense fallback={<p className="text-sm text-text-subtle">Loading…</p>}>
+    <Suspense fallback={<div className="h-96 skeleton rounded-2xl" aria-busy="true" />}>
       <FormationPlayer params={params} />
     </Suspense>
   );
@@ -70,25 +81,51 @@ function FormationPlayer({ params }: { params: Promise<{ id: string }> }) {
           const wi = flatL.findIndex((x) => x.lesson.id === want);
           if (wi >= 0) setIdx(wi);
         }
+        if (learner) {
+          api
+            .formationProgress(formationId, learner.id)
+            .then((p) => {
+              const done = new Set(p.completed);
+              setCompleted(done);
+              setXpEarned(p.xp_earned);
+              // No lesson asked for: open where they left off, not on lesson
+              // one of a training they are half-way through.
+              if (!want) {
+                const next = flatL.findIndex((x) => !done.has(x.lesson.id));
+                if (next > 0) setIdx(next);
+              }
+            })
+            .catch(() => {});
+        }
       })
       .catch((e) => setError(String(e)));
-    if (learner) {
-      api
-        .formationProgress(formationId, learner.id)
-        .then((p) => {
-          setCompleted(new Set(p.completed));
-          setXpEarned(p.xp_earned);
-        })
-        .catch(() => {});
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formationId]);
 
   const current = flat[idx];
 
+  function go(i: number) {
+    if (i < 0 || i >= flat.length) return;
+    setIdx(i);
+    window.scrollTo({ top: 0 });
+  }
+
+  // ← / → move between lessons when the reader isn't typing (playgrounds and
+  // challenges are full of text boxes, so this stays out of their way).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "ArrowRight" && idx < flat.length - 1) go(idx + 1);
+      if (e.key === "ArrowLeft" && idx > 0) go(idx - 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   async function markComplete(data?: Record<string, unknown>) {
     if (!me) {
-      setError("Pick a handle first (top-right) so your progress can be saved.");
+      setError(t("form.hub.signIn"));
       return;
     }
     try {
@@ -96,7 +133,7 @@ function FormationPlayer({ params }: { params: Promise<{ id: string }> }) {
       setCompleted(new Set(p.completed));
       setXpEarned(p.xp_earned);
       window.dispatchEvent(new Event("dqai-learner-changed"));
-      if (idx < flat.length - 1) setIdx(idx + 1);
+      if (idx < flat.length - 1) go(idx + 1);
     } catch (e) {
       setError(String(e));
     }
@@ -108,9 +145,27 @@ function FormationPlayer({ params }: { params: Promise<{ id: string }> }) {
     window.dispatchEvent(new Event("dqai-learner-changed"));
   }
 
-  if (error && !formation) return <p className="text-sm text-bad">{error}</p>;
+  if (error && !formation)
+    return (
+      <p role="alert" className="rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+        {error}
+      </p>
+    );
   if (!formation || flat.length === 0)
-    return <p className="text-sm text-text-subtle">Loading…</p>;
+    return (
+      <div className="grid gap-8 lg:grid-cols-[17rem_minmax(0,1fr)]" aria-busy="true">
+        <div className="space-y-2">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="h-8 skeleton" />
+          ))}
+        </div>
+        <div className="space-y-3">
+          <div className="h-9 w-2/3 skeleton" />
+          <div className="h-4 w-full skeleton" />
+          <div className="h-4 w-5/6 skeleton" />
+        </div>
+      </div>
+    );
 
   const pct = Math.round((100 * completed.size) / flat.length);
   // Lessons that complete through their own interaction, not the bottom bar.
@@ -120,105 +175,156 @@ function FormationPlayer({ params }: { params: Promise<{ id: string }> }) {
     current.lesson.type,
   );
 
+  const prev = flat[idx - 1];
+  const next = flat[idx + 1];
+  const isDone = completed.has(current.lesson.id);
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href={`/formations/${formationId}`} className="text-xs text-text-subtle hover:text-text">
-          ← {formation.emoji} {formation.title}
+    <div className="space-y-6">
+      {/* ---- Training bar -------------------------------------------------- */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-border pb-4">
+        <Link href={`/formations/${formationId}`} className="group flex min-w-0 items-center gap-2 text-sm">
+          <Icon name="arrow-right" size={14} className="rotate-180 text-text-subtle group-hover:text-text" />
+          <span className="text-lg" aria-hidden="true">{formation.emoji}</span>
+          <span className="truncate font-medium text-text group-hover:text-accent-text">{formation.title}</span>
         </Link>
-        <div className="flex items-center gap-3 text-xs text-text-subtle">
-          <span>⚡ {xpEarned} XP earned</span>
-          <div className="h-1.5 w-32 overflow-hidden rounded-full bg-surface-2">
+        <div className="ml-auto flex items-center gap-3">
+          <span className="inline-flex items-center gap-1 text-xs text-text-subtle tnum">
+            <Icon name="bolt" size={12} className="text-iris" /> {t("learn.xpEarned", { xp: xpEarned })}
+          </span>
+          <div
+            className="h-1.5 w-40 overflow-hidden rounded-full bg-surface-3"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={t("course.progress")}
+          >
             <div
-              className={`h-full rounded-full ${pct === 100 ? "bg-good" : "bg-accent"}`}
-              style={{ width: `${Math.max(2, pct)}%` }}
+              className={`h-full origin-left rounded-full transition-transform duration-500 ${pct === 100 ? "bg-good" : "bg-accent"}`}
+              style={{ transform: `scaleX(${pct / 100})` }}
             />
           </div>
-          <span className="font-medium text-text">{pct}%</span>
+          <span className="w-9 text-right text-xs font-medium tnum">{pct}%</span>
         </div>
       </div>
 
       {error && (
-        <div className="card cursor-pointer border-bad/40 text-sm text-bad" onClick={() => setError(null)}>
-          {error} <span className="text-xs text-text-subtle">(click to dismiss)</span>
+        <div role="alert" className="flex items-start gap-3 rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+          <span className="flex-1">{error}</span>
+          <button type="button" onClick={() => setError(null)} aria-label={t("common.close")} className="shrink-0 hover:opacity-70">
+            <Icon name="x" size={15} />
+          </button>
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        {/* Curriculum sidebar */}
-        <nav className="space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
-          {(formation.curriculum.modules ?? []).map((m, mi) => (
-            <div key={mi}>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">
-                Module {mi + 1} · {m.title}
-              </p>
-              <div className="space-y-1">
-                {m.lessons.map((l) => {
-                  const fi = flat.findIndex((f) => f.lesson.id === l.id);
-                  const active = fi === idx;
-                  const meta = F_LESSON_META[l.type] ?? F_LESSON_META.article;
-                  return (
-                    <button
-                      key={l.id}
-                      onClick={() => setIdx(fi)}
-                      className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm transition ${
-                        active
-                          ? "border-accent bg-accent/10"
-                          : "border-border hover:bg-surface-2"
-                      }`}
-                    >
-                      <span>{completed.has(l.id) ? "✅" : meta.icon}</span>
-                      <span className="min-w-0 flex-1 truncate">{l.title}</span>
-                      <span className="shrink-0 text-[10px] text-text-subtle">⚡{l.xp ?? 10}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+      <div className="grid gap-10 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        {/* ---- Outline ------------------------------------------------------ */}
+        <nav aria-label={t("course.curriculum")} className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
+          <ol className="space-y-5">
+            {(formation.curriculum.modules ?? []).map((m, mi) => (
+              <li key={mi}>
+                <p className="mb-2 text-xs font-semibold text-text-subtle">
+                  <span className="mr-1.5 font-mono tnum">{String(mi + 1).padStart(2, "0")}</span>
+                  {m.title}
+                </p>
+                <ol>
+                  {m.lessons.map((l, li) => {
+                    const fi = flat.findIndex((f) => f.lesson.id === l.id);
+                    const active = fi === idx;
+                    const done = completed.has(l.id);
+                    return (
+                      <li key={l.id} className="relative">
+                        {li < m.lessons.length - 1 && (
+                          <span className={`absolute left-[11px] top-7 h-[calc(100%-1rem)] w-px ${done ? "bg-good/40" : "bg-border"}`} aria-hidden="true" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => go(fi)}
+                          aria-current={active ? "step" : undefined}
+                          className={`relative flex w-full items-start gap-3 rounded-lg py-1.5 pr-2 text-left text-sm transition-colors ${
+                            active ? "text-text" : "text-text-muted hover:text-text"
+                          }`}
+                        >
+                          <span
+                            className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 transition-colors ${
+                              done
+                                ? "border-good bg-good text-white"
+                                : active
+                                  ? "border-accent bg-surface text-accent-text"
+                                  : "border-border bg-bg text-text-subtle"
+                            }`}
+                          >
+                            <Icon name={done ? "check" : TYPE_ICON[l.type] ?? "file"} size={11} strokeWidth={done ? 3 : 2} />
+                          </span>
+                          <span className={`min-w-0 flex-1 leading-snug ${active ? "font-semibold" : ""}`}>{l.title}</span>
+                          <span className="mt-0.5 shrink-0 text-[10px] text-text-subtle tnum">{l.xp ?? 10}</span>
+                          <span className="sr-only">{done ? t("course.completed") : ""}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-6 hidden text-xs text-text-subtle lg:block">
+            {t("learn.keys")} <span className="kbd">←</span> <span className="kbd">→</span>
+          </p>
         </nav>
 
-        {/* Lesson */}
-        <div className="space-y-4">
-          <LessonView
-            key={current.lesson.id}
-            formationId={formationId}
-            lesson={current.lesson}
-            me={me}
-            done={completed.has(current.lesson.id)}
-            onComplete={markComplete}
-            onChallengePassed={onChallengePassed}
-          />
+        {/* ---- Lesson ------------------------------------------------------- */}
+        <div className="min-w-0">
+          <article className="mx-auto max-w-[72ch]">
+            <LessonView
+              key={current.lesson.id}
+              formationId={formationId}
+              lesson={current.lesson}
+              me={me}
+              done={isDone}
+              position={t("learn.lessonOf", { n: idx + 1, total: flat.length })}
+              moduleLabel={`${String(current.moduleIndex + 1).padStart(2, "0")} · ${current.module}`}
+              onComplete={markComplete}
+              onChallengePassed={onChallengePassed}
+            />
 
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <button className="btn-ghost" onClick={() => setIdx(Math.max(0, idx - 1))} disabled={idx === 0}>
-              ← Prev
-            </button>
-            <span className="text-xs text-text-subtle">
-              {idx + 1} / {flat.length}
-            </span>
-            {gradedHere && !completed.has(current.lesson.id) ? (
-              <button
-                className="btn-ghost"
-                onClick={() => setIdx(Math.min(flat.length - 1, idx + 1))}
-                disabled={idx === flat.length - 1}
-              >
-                {t("form.skipForNow")}
-              </button>
-            ) : completed.has(current.lesson.id) ? (
-              <button
-                className="btn"
-                onClick={() => setIdx(Math.min(flat.length - 1, idx + 1))}
-                disabled={idx === flat.length - 1}
-              >
-                {t("form.next")}
-              </button>
-            ) : (
-              <button className="btn" onClick={() => markComplete()}>
-                {idx < flat.length - 1 ? "Complete & next →" : "Finish 🎉"}
-              </button>
-            )}
-          </div>
+            <div className="mt-10 border-t border-border pt-6">
+              {!gradedHere && !isDone && (
+                <button type="button" className="btn mb-6 w-full justify-center py-3 text-[15px] sm:w-auto sm:px-6" onClick={() => markComplete()}>
+                  <Icon name="check" size={16} /> {idx < flat.length - 1 ? t("learn.completeNext") : t("learn.finishTraining")}
+                </button>
+              )}
+              {gradedHere && !isDone && (
+                <p className="mb-6 text-sm text-text-subtle">{t("learn.gradedHere")}</p>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {prev ? (
+                  <button type="button" onClick={() => go(idx - 1)} className="group rounded-xl border border-border p-4 text-left transition-colors hover:border-border-strong hover:bg-surface">
+                    <span className="flex items-center gap-1 text-xs text-text-subtle">
+                      <Icon name="arrow-right" size={12} className="rotate-180" /> {t("learn.previous")}
+                    </span>
+                    <span className="mt-1 block truncate text-sm font-medium group-hover:text-accent-text">{prev.lesson.title}</span>
+                  </button>
+                ) : (
+                  <span />
+                )}
+                {next && (
+                  <button
+                    type="button"
+                    onClick={() => go(idx + 1)}
+                    className={`group rounded-xl border p-4 text-right transition-colors hover:bg-surface ${
+                      isDone ? "border-accent/50 hover:border-accent" : "border-border hover:border-border-strong"
+                    }`}
+                  >
+                    <span className="flex items-center justify-end gap-1 text-xs text-text-subtle">
+                      {gradedHere && !isDone ? t("form.skipForNow") : t("learn.next")} <Icon name="arrow-right" size={12} />
+                    </span>
+                    <span className="mt-1 block truncate text-sm font-medium group-hover:text-accent-text">{next.lesson.title}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </article>
         </div>
       </div>
     </div>
@@ -234,6 +340,8 @@ function LessonView({
   lesson,
   me,
   done,
+  position,
+  moduleLabel,
   onComplete,
   onChallengePassed,
 }: {
@@ -241,6 +349,8 @@ function LessonView({
   lesson: FormationLesson;
   me: Learner | null;
   done: boolean;
+  position: string;
+  moduleLabel: string;
   onComplete: (data?: Record<string, unknown>) => void;
   onChallengePassed: (r: ChallengeResult) => void;
 }) {
@@ -252,25 +362,39 @@ function LessonView({
   );
 
   return (
-    <div className="card space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="badge bg-edge text-text-muted">
-          {meta.icon} {meta.label}
-        </span>
-        <span className="badge bg-edge text-text-subtle">{fmtDuration(lesson.duration_min ?? 5)}</span>
-        <span className="badge badge-accent">⚡ {lesson.xp ?? 10} XP</span>
-        {done && <span className="badge badge-good">✓ completed</span>}
-      </div>
-      <h1 className="text-xl font-semibold">{lesson.title}</h1>
+    <div className="space-y-6 [&_.my-2>li]:text-[15px] [&_li]:leading-7 [&_p.my-2]:text-[15px] [&_p.my-2]:leading-7">
+      <header>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-subtle">
+          <span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-1.5 py-0.5 font-medium text-accent-text">
+            <Icon name={TYPE_ICON[lesson.type] ?? "file"} size={11} /> {meta.label}
+          </span>
+          <span>{moduleLabel}</span>
+          <span aria-hidden="true">·</span>
+          <span className="tnum">{position}</span>
+          <span aria-hidden="true">·</span>
+          <span className="inline-flex items-center gap-1 tnum">
+            <Icon name="clock" size={11} /> {fmtDuration(lesson.duration_min ?? 5)}
+          </span>
+          <span className="inline-flex items-center gap-1 tnum">
+            <Icon name="bolt" size={11} className="text-iris" /> {lesson.xp ?? 10}&nbsp;XP
+          </span>
+          {done && (
+            <span className="inline-flex items-center gap-1 text-good">
+              <Icon name="check" size={12} /> {t("course.completed")}
+            </span>
+          )}
+        </p>
+        <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.025em]">{lesson.title}</h1>
+      </header>
 
       {lesson.type === "video" && lesson.video_url && (
         embed ? (
-          <div className="aspect-video w-full overflow-hidden rounded-lg border border-border">
+          <div className="aspect-video w-full overflow-hidden rounded-xl border border-border bg-black shadow-sm">
             <iframe src={embed} className="h-full w-full" allowFullScreen title={lesson.title} />
           </div>
         ) : (
-          <a href={lesson.video_url} target="_blank" rel="noopener noreferrer" className="btn inline-flex">
-            🎬 Watch video
+          <a href={lesson.video_url} target="_blank" rel="noopener noreferrer" className="btn">
+            <Icon name="play" size={16} /> {t("learn.watch")}
           </a>
         )
       )}
@@ -280,8 +404,19 @@ function LessonView({
       )}
 
       {lesson.type === "lab" && lesson.lab_id && (
-        <Link href={`/labs/${lesson.lab_id}`} target="_blank" className="btn inline-flex">
-          🧪 Open the lab (new tab)
+        <Link
+          href={`/labs/${lesson.lab_id}`}
+          target="_blank"
+          className="group flex items-center gap-4 rounded-xl border border-accent/30 bg-accent/5 p-5 transition-colors hover:border-accent"
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-accent-fg">
+            <Icon name="labs" size={20} />
+          </span>
+          <span className="flex-1">
+            <span className="block font-semibold">{t("learn.openLab")}</span>
+            <span className="block text-sm text-text-muted">{t("learn.openLabHint")}</span>
+          </span>
+          <Icon name="external" size={16} className="text-accent-text" />
         </Link>
       )}
 
@@ -601,7 +736,7 @@ function ChallengeLesson({
           onChange={(e) => setPromptText(e.target.value)}
         />
         <button className="btn mt-2" onClick={submit} disabled={running || !promptText.trim()}>
-          {running ? "Running & grading…" : "🚀 Run & submit for grading"}
+          {running ? "Running & grading…" : "Run & submit for grading"}
         </button>
         {running && (
           <p className="mt-1 text-xs text-text-subtle">

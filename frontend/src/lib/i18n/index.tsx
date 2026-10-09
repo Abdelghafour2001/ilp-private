@@ -96,7 +96,10 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       const vars = typeof varsOrFallback === "object" ? varsOrFallback : undefined;
       const fallback =
         typeof varsOrFallback === "string" ? varsOrFallback : maybeFallback;
-      const value = DICTIONARIES[locale][key] ?? en[key] ?? fallback ?? key;
+      // "{n} lessons" with n = 1 reads "1 lessons". When the count is one and
+      // the dictionary has a `_one` form, use it.
+      const one = vars?.n === 1 ? (DICTIONARIES[locale][`${key}_one`] ?? en[`${key}_one`]) : undefined;
+      const value = one ?? DICTIONARIES[locale][key] ?? en[key] ?? fallback ?? key;
       return interpolate(value, vars);
     },
     [locale],

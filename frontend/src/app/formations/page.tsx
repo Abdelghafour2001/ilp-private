@@ -296,7 +296,7 @@ export default function FormationsHub() {
                     owed.has(c.id) ? "border-bad/60 ring-1 ring-bad/30" : "border-border group-hover:border-border-strong"
                   }`}
                 >
-                  <CourseCover emoji={c.emoji} title={c.title} className="aspect-[16/9] rounded-none" />
+                  <CourseCover emoji={c.emoji} className="aspect-[16/9] rounded-none" />
                   {(owed.get(c.id) || c.mandatory) && (
                     <span className="absolute left-3 top-3 flex gap-1.5">
                       {owed.get(c.id) ? <OwedMarker owed={owed.get(c.id)!} /> : <MandatoryBadge size="sm" />}
