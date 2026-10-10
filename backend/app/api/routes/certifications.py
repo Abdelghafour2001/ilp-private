@@ -18,6 +18,7 @@ from sqlalchemy import or_ as sa_or
 from sqlalchemy.orm import Session
 
 from app.core.cert_expiry import expiry_from_validity
+from app.core import manager_alerts
 from app.core.config import settings
 from app.core.notifier import notify
 from app.core.rbac import oversight_scope
@@ -421,17 +422,25 @@ def share_certificate(payload: EarnedCreate, db: Session = Depends(get_db)):
     )
     db.add(e)
 
-    # Celebrate with the team: members + the Skill Lead and manager.
+    # Celebrate with the team: members + the Skill Lead and manager. The
+    # manager gets their own line, in their language and pointing at their
+    # team, so they are left out of the broadcast rather than told twice.
     if learner.team_id:
         team_obj = db.get(Team, learner.team_id)
+        manager = manager_alerts.manager_of(db, learner)
         audience = [m.id for m in db.query(Learner).filter(Learner.team_id == learner.team_id)]
         if team_obj:
             audience += [team_obj.lead_id or 0, team_obj.manager_id or 0]
+        if manager:
+            audience = [i for i in audience if i != manager.id]
+            manager_alerts.tell_manager(
+                db, learner, kind="cert_earned", key="team.cert", title=title, issuer=e.issuer or "—",
+            )
         notify(
             db,
             audience,
             kind="cert_earned",
-            title=f"🏅 {learner.name or learner.handle} earned {title}",
+            title=f"{learner.name or learner.handle} earned {title}",
             body=e.issuer,
             link="/certifications",
             exclude=learner.id,

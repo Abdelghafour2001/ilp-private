@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.ai import judge_prompt, run_trainee_prompt
-from app.core import external_progress
+from app.core import external_progress, manager_alerts
 from app.core.config import settings
 from app.core.email_template import Button, render_email
 from app.core.mailer import send_email
@@ -641,8 +641,13 @@ def _record_completion(
             db, "formation", formation.id, learner_id
         ):
             enrollment.status = "active"
-        else:
+        elif enrollment.status != "completed":
             enrollment.status = "completed"
+            if learner:
+                manager_alerts.tell_manager(
+                    db, learner, kind="team_completion", key="team.done.formation",
+                    title=formation.title,
+                )
 
 
 # --------------------------------------------------------------------------- #

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core import manager_alerts
 from app.core.config import settings
 from app.core.notifier import notify
 from app.db.session import get_db
@@ -241,5 +242,11 @@ def _settle_feedback_step(db: Session, etype: str, eid: int, learner_id: int) ->
     }
     if ids and ids.issubset(done):
         enrollment.status = "completed"
+        learner = db.get(Learner, learner_id)
+        if learner:
+            manager_alerts.tell_manager(
+                db, learner, kind="team_completion", key="team.done.formation",
+                title=formation.title,
+            )
         return True
     return False

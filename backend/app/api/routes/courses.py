@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.core import manager_alerts
 from app.core.config import settings
 from app.core.covers import derive_cover
 from app.core.tracking import track_editor
@@ -251,6 +252,21 @@ def complete_lesson(
                 learner_id=learner_id, course_id=course_id, lesson_id=lesson_id
             )
         )
+        db.flush()
+        # This lesson was the last one: the manager hears about it once, at
+        # the moment it happens. Re-opening a finished lesson changes nothing.
+        total = set(lesson_ids(course.curriculum))
+        done = {
+            c.lesson_id
+            for c in db.query(CourseLessonCompletion).filter_by(
+                learner_id=learner_id, course_id=course_id
+            )
+        }
+        learner = db.get(Learner, learner_id)
+        if learner and total and total.issubset(done):
+            manager_alerts.tell_manager(
+                db, learner, kind="team_completion", key="team.done.course", title=course.title,
+            )
         db.commit()
     return progress(course_id, learner_id, db)
 

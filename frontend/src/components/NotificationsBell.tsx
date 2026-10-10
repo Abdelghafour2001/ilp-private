@@ -15,6 +15,10 @@ const KIND: Record<string, { icon: IconName; tone: string }> = {
   team: { icon: "team", tone: "bg-surface-3 text-text-muted" },
   cert_suggested: { icon: "target", tone: "bg-warn/10 text-warn" },
   cert_earned: { icon: "award", tone: "bg-good/10 text-good" },
+  // What a manager hears about their own people.
+  team_completion: { icon: "check", tone: "bg-good/10 text-good" },
+  team_learning: { icon: "book", tone: "bg-accent/10 text-accent-text" },
+  team_mandatory: { icon: "target", tone: "bg-warn/10 text-warn" },
   info: { icon: "bell", tone: "bg-surface-3 text-text-muted" },
 };
 
