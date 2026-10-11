@@ -1375,6 +1375,11 @@ export interface LearningRecord {
   skills: { id: number; name: string }[];
 }
 
+export interface TeamLearningRecord extends LearningRecord {
+  learner_name: string;
+  learner_email: string;
+}
+
 // ---- Approvals: the tracking board ----
 
 export type ApprovalKind = "training_request" | "asset" | "learning_record" | "course";
@@ -2573,6 +2578,9 @@ export const api = {
     }),
   deleteLearning: (recordId: number, learnerId: number) =>
     req<void>(`/learning/records/${recordId}?learner_id=${learnerId}`, { method: "DELETE" }),
+  /** A team's declared learning, for the people allowed to verify it. */
+  teamLearning: (teamId: number, viewerId: number) =>
+    req<TeamLearningRecord[]>(`/learning/team?team_id=${teamId}&viewer_id=${viewerId}`),
   verifyLearning: (recordId: number, learnerId: number) =>
     req<{ verified: boolean; by: string }>(
       `/learning/records/${recordId}/verify?learner_id=${learnerId}`,

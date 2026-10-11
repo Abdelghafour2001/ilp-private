@@ -66,6 +66,38 @@ def manager_of(db: Session, learner: Learner) -> Learner | None:
     return db.get(Learner, head_id)
 
 
+def team_link(learner: Learner, anchor: str = "") -> str:
+    """The manager's view of this person's team, optionally at a section."""
+    base = f"/team?team={learner.team_id}" if learner.team_id else "/team"
+    return base + (f"#{anchor}" if anchor else "")
+
+
+def tell_manager(db: Session, learner: Learner, kind: str, key: str, link: str = "", **vars) -> bool:
+    """One in-app note to the learner's manager about something they just did.
+
+    For the good news a manager asked to hear about as it happens — a course
+    finished, a certificate shared, learning logged. In-app only, on purpose:
+    these are one line each and need no action, and a mail per completion is
+    exactly the noise the digest above exists to avoid. The one that does ask
+    something of the manager (verifying declared learning) links to where it
+    can be done.
+
+    `key` names a `.title`/`.body` pair in `app.core.i18n`, rendered in the
+    manager's language. The caller commits.
+    """
+    manager = manager_of(db, learner)
+    if not manager:
+        return False
+    who = learner.name or learner.handle
+    notify(
+        db, [manager.id], kind=kind,
+        title=tr(manager, f"{key}.title", who=who, **vars),
+        body=tr(manager, f"{key}.body", who=who, **vars),
+        link=link or team_link(learner),
+    )
+    return True
+
+
 def _tell(db: Session, manager: Learner, title: str, lines: list[str], cta: str) -> bool:
     """One notification and, when mail is on, one email. Returns True if mailed."""
     notify(

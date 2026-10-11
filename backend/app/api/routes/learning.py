@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core import manager_alerts
 from app.db.session import get_db
 from app.models import (
     Learner,
@@ -29,6 +30,9 @@ from app.models import (
 from app.models.learning_record import RECORD_KINDS
 
 router = APIRouter(prefix="/learning", tags=["learning"])
+
+# Logged learning worth a line in the manager's notifications.
+NOTIFY_KINDS = ("course", "conference", "mentoring")
 
 
 class LearningRecordIn(BaseModel):
@@ -141,6 +145,15 @@ def create_record(payload: LearningRecordIn, db: Session = Depends(get_db)):
         if db.get(Skill, sid):
             db.add(LearningRecordSkill(record_id=record.id, skill_id=sid))
 
+    # Courses and conferences are what a manager wants to know about; an
+    # article read over coffee is the learner's own business until they
+    # choose to show it. Logging must stay a habit, not a broadcast.
+    if record.kind in NOTIFY_KINDS:
+        manager_alerts.tell_manager(
+            db, learner, kind="team_learning", key="team.logged",
+            link=manager_alerts.team_link(learner, "declared"),
+            title=record.title, minutes=record.minutes,
+        )
     db.commit()
     db.refresh(record)
     return _out(db, record, {s.id: s for s in db.query(Skill).all()})
@@ -215,9 +228,49 @@ def declare_coursera(payload: CourseraClaimIn, db: Session = Depends(get_db)):
         external_slug=slug,
     )
     db.add(record)
+    # A claim is the one thing here that asks something of the manager.
+    manager_alerts.tell_manager(
+        db, learner, kind="team_learning", key="team.claimed",
+        link=manager_alerts.team_link(learner, "declared"), title=record.title,
+    )
     db.commit()
     db.refresh(record)
     return _out(db, record, {s.id: s for s in db.query(Skill).all()})
+
+
+@router.get("/team")
+def team_records(team_id: int, viewer_id: int, limit: int = 50, db: Session = Depends(get_db)):
+    """What a team declared, newest first, for the people who may verify it.
+
+    The manager is told when somebody logs a course or claims one; this is the
+    place that message points at, so the claim can be checked and vouched for
+    without asking the person to forward a link.
+    """
+    team = db.get(Team, team_id)
+    viewer = db.get(Learner, viewer_id)
+    if not team or not viewer:
+        raise HTTPException(status_code=404, detail="Team not found")
+    if not (viewer.role in ("hr", "hr_lead", "admin") or viewer.id in (team.manager_id, team.lead_id)):
+        raise HTTPException(status_code=403, detail="Only this team's manager, Skill Lead, HR or an admin can see this.")
+    members = {m.id: m for m in db.query(Learner).filter(Learner.team_id == team_id)}
+    if not members:
+        return []
+    rows = (
+        db.query(LearningRecord)
+        .filter(LearningRecord.learner_id.in_(members))
+        .order_by(LearningRecord.id.desc())
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
+    skills_by_id = {s.id: s for s in db.query(Skill).all()}
+    return [
+        {
+            **_out(db, r, skills_by_id),
+            "learner_name": members[r.learner_id].name or members[r.learner_id].handle,
+            "learner_email": members[r.learner_id].email or "",
+        }
+        for r in rows
+    ]
 
 
 @router.delete("/records/{record_id}", status_code=204)

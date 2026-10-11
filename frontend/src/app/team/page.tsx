@@ -7,6 +7,7 @@ import { getStoredLearner } from "@/lib/learner";
 import { useT } from "@/lib/i18n";
 import Modal from "@/components/Modal";
 import Icon from "@/components/Icon";
+import TeamDeclaredLearning from "@/components/TeamDeclaredLearning";
 import { useFormat } from "@/lib/i18n";
 
 /** Days since a date, or null when there is none. */
@@ -568,6 +569,8 @@ export default function TeamPage() {
               </table>
             </div>
           </section>
+
+          {teamId && me && <TeamDeclaredLearning teamId={teamId} viewerId={me.id} />}
         </>
       )}
     </div>
